@@ -733,11 +733,8 @@ std::expected<void, QString> RimWorkflow::saveAs( const QString& directory )
 
     if ( !m_sourceDirectory.isEmpty() && QDir( m_sourceDirectory ).absolutePath() != target.absolutePath() )
     {
-        const QDir source( m_sourceDirectory );
-        for ( const QString& fileName : source.entryList( { "*.py" }, QDir::Files ) )
-        {
-            if ( !target.exists( fileName ) ) QFile::copy( source.absoluteFilePath( fileName ), target.absoluteFilePath( fileName ) );
-        }
+        if ( auto copied = copyPythonModules( m_sourceDirectory, target.absolutePath() ); !copied )
+            return std::unexpected( QString( "The workflow was not saved: %1" ).arg( copied.error() ) );
     }
 
     auto output = saveToDirectory( target.absolutePath(), false );
@@ -806,6 +803,33 @@ std::expected<RimWorkflow::RunSource, QString> RimWorkflow::prepareRunSource( co
                                                      m_sourceDirectory );
     if ( !output ) return std::unexpected( output.error() );
     return RunSource{ .baseArgs = { "run", runDirectory }, .extraPythonPath = m_sourceDirectory };
+}
+
+//--------------------------------------------------------------------------------------------------
+/// Copies the `*.py` files and the package folders (with `__init__.py`), without `__pycache__`.
+/// Files that already exist in the target are kept. Fails on the first file that cannot be copied.
+//--------------------------------------------------------------------------------------------------
+std::expected<void, QString> RimWorkflow::copyPythonModules( const QString& sourceDirectory, const QString& targetDirectory )
+{
+    const QDir source( sourceDirectory );
+    QDir       target( targetDirectory );
+    if ( !target.exists() && !QDir().mkpath( targetDirectory ) )
+        return std::unexpected( QString( "Could not create the folder '%1'" ).arg( targetDirectory ) );
+
+    for ( const QString& fileName : source.entryList( { "*.py" }, QDir::Files ) )
+    {
+        if ( target.exists( fileName ) ) continue;
+        if ( !QFile::copy( source.absoluteFilePath( fileName ), target.absoluteFilePath( fileName ) ) )
+            return std::unexpected( QString( "Could not copy '%1' to '%2'" ).arg( source.absoluteFilePath( fileName ), targetDirectory ) );
+    }
+
+    for ( const QString& folderName : source.entryList( QDir::Dirs | QDir::NoDotAndDotDot ) )
+    {
+        if ( folderName == "__pycache__" || !QFileInfo::exists( source.absoluteFilePath( folderName + "/__init__.py" ) ) ) continue;
+        if ( auto copied = copyPythonModules( source.absoluteFilePath( folderName ), target.absoluteFilePath( folderName ) ); !copied )
+            return copied;
+    }
+    return {};
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -26,7 +26,9 @@
 #include "RimWorkflowTaskInput.h"
 #include "RimWorkflowValidationTools.h"
 
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -117,6 +119,42 @@ TEST( RimWorkflowJobSync, valuesFollowRenamesAndRemovals )
     job.syncTaskInputs( graphTasks( removed.value() ), { { "load_grid", "load_model" } } );
     job.syncTaskInputs( graphTasks( restored ) );
     EXPECT_EQ( "/path/to/grid.roff", pathValue( job, "load_model" ) );
+}
+
+//--------------------------------------------------------------------------------------------------
+TEST( RimWorkflowEditing, copyPythonModules )
+{
+    QTemporaryDir directory;
+    ASSERT_TRUE( directory.isValid() );
+    const QDir root( directory.path() );
+    auto       write = [&root]( const QString& path, const QByteArray& content )
+    {
+        QDir().mkpath( QFileInfo( root.absoluteFilePath( path ) ).absolutePath() );
+        QFile file( root.absoluteFilePath( path ) );
+        return file.open( QIODevice::WriteOnly ) && file.write( content ) == content.size();
+    };
+    ASSERT_TRUE( write( "source/tasks.py", "new" ) );
+    ASSERT_TRUE( write( "source/workflow.yaml", "" ) );
+    ASSERT_TRUE( write( "source/helpers/__init__.py", "" ) );
+    ASSERT_TRUE( write( "source/helpers/math.py", "" ) );
+    ASSERT_TRUE( write( "source/helpers/__pycache__/math.pyc", "" ) );
+    ASSERT_TRUE( write( "source/data/values.py", "" ) );
+    ASSERT_TRUE( write( "target/tasks.py", "existing" ) );
+
+    ASSERT_TRUE( RimWorkflow::copyPythonModules( root.absoluteFilePath( "source" ), root.absoluteFilePath( "target" ) ).has_value() );
+    EXPECT_TRUE( root.exists( "target/helpers/__init__.py" ) );
+    EXPECT_TRUE( root.exists( "target/helpers/math.py" ) );
+    EXPECT_FALSE( root.exists( "target/helpers/__pycache__" ) );
+    EXPECT_FALSE( root.exists( "target/data" ) );
+    EXPECT_FALSE( root.exists( "target/workflow.yaml" ) );
+
+    QFile existing( root.absoluteFilePath( "target/tasks.py" ) );
+    ASSERT_TRUE( existing.open( QIODevice::ReadOnly ) );
+    EXPECT_EQ( "existing", existing.readAll() );
+
+    // A target that cannot be created is reported
+    ASSERT_TRUE( write( "blocked", "" ) );
+    EXPECT_FALSE( RimWorkflow::copyPythonModules( root.absoluteFilePath( "source" ), root.absoluteFilePath( "blocked/target" ) ).has_value() );
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -116,6 +116,9 @@ public:
 
     static QString findPythonExecutable();
 
+    // Copy the Python modules and packages of a workflow folder. Existing files are kept.
+    static std::expected<void, QString> copyPythonModules( const QString& sourceDirectory, const QString& targetDirectory );
+
 protected:
     void appendMenuItems( caf::CmdFeatureMenuBuilder& menuBuilder ) const override;
     void defineUiOrdering( QString uiConfigName, caf::PdmUiOrdering& uiOrdering ) override;
