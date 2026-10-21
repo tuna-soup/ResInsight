@@ -14,18 +14,27 @@ from typing import Any
 REF_MARKER = "__resinsight_ref__"
 
 
+def _is_ref(value: Any) -> bool:
+    return isinstance(value, dict) and REF_MARKER in value
+
+
+def _holds_ref(value: Any) -> bool:
+    """A reference, or a list with a reference among its items."""
+    return _is_ref(value) or (
+        isinstance(value, list) and any(_holds_ref(item) for item in value)
+    )
+
+
 def strip_refs(value: Any) -> Any:
-    """Remove ResInsight object references, which are only valid for one run."""
+    """Remove ResInsight object references, which are only valid for one run.
+
+    A list that holds a reference is removed as a whole: dropping only the
+    reference would shorten the list and change what the remaining items mean.
+    """
     if isinstance(value, dict):
         return {
-            key: strip_refs(item)
-            for key, item in value.items()
-            if not (isinstance(item, dict) and REF_MARKER in item)
+            key: strip_refs(item) for key, item in value.items() if not _holds_ref(item)
         }
     if isinstance(value, list):
-        return [
-            strip_refs(item)
-            for item in value
-            if not (isinstance(item, dict) and REF_MARKER in item)
-        ]
+        return [strip_refs(item) for item in value if not _holds_ref(item)]
     return value

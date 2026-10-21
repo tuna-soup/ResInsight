@@ -14,6 +14,22 @@ import pytest
 pytest.importorskip("taskmaestro")
 
 
+def test_strip_refs_drops_references_and_lists_holding_them() -> None:
+    from rips.taskmaestro_helper.refs import strip_refs
+
+    ref = {"__resinsight_ref__": "EclipseCase", "case_id": 0}
+    inputs = {
+        "start": {"case": ref, "count": 1},
+        "sum": {"cases": [ref, ref], "mixed": [1.0, ref], "values": [1.0, 2.0]},
+        "only_refs": {"case": ref},
+    }
+    assert strip_refs(inputs) == {
+        "start": {"count": 1},
+        "sum": {"values": [1.0, 2.0]},
+        "only_refs": {},
+    }
+
+
 def test_resolve_refs_substitutes_object_model_value() -> None:
     from rips.taskmaestro_helper.run import resolve_refs
 
