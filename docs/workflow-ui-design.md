@@ -407,8 +407,8 @@ Touched (existing files):
   `RimWorkflowCollection::discoveryDirectory()`. A `RiaPreferences` field
   + Preferences UI would be a small follow-up if multiple roots are wanted.
 - **New edit operation**: add a pure function to `RimWorkflowDefinitionTools`
-  with a unit test, call it through `RimWorkflow::applyEdit`, and expose it
-  with a `Ric*WorkflowFeature` that reads its arguments from `userData()`.
+  with a unit test, call it through `RiuWorkflowEditorWidget::applyEdit`, and
+  add it to the graph context menu in `RiuWorkflowEditorWidget`.
 - **Supporting nested workflows in the editor**: extend the
   definition JSON and `RimWorkflowDefinitionNode`, drop the read-only reason
   in `definition.py` and `structuralReadOnlyReasons`, and teach `save` to

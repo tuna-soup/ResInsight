@@ -34,9 +34,6 @@ RimWorkflow*             selectedWorkflow();
 RimWorkflow*             displayedWorkflow();
 RiuWorkflowEditorWidget* workflowEditor();
 
-// The editor when it shows an editable, unlocked workflow; graph commands act on it
-RiuWorkflowEditorWidget* editableWorkflowEditor();
-
 RimWorkflow* newWorkflow();
 RimWorkflow* duplicateAsEditable( RimWorkflow* workflow );
 bool         saveWorkflow( RimWorkflow* workflow );

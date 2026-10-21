@@ -63,7 +63,7 @@ public:
     RiuWorkflowGraphView*   graphView() const;
     RiuWorkflowTaskPalette* palette() const;
 
-    // Edit operations used by the graph commands. Errors are shown in the status line.
+    // Edit operations of the graph context menus. Errors are shown in the status line.
     bool applyEdit( const std::expected<RimWorkflowDefinition, QString>& result, const QMap<QString, QString>& renames = {} );
     void addTask( const QString& taskId, const std::optional<QPointF>& scenePos = std::nullopt );
     void deleteItem( const RiuWorkflowGraphView::ItemRef& item );

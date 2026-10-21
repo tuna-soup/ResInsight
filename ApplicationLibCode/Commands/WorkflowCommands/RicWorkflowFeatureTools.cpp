@@ -85,17 +85,6 @@ RiuWorkflowEditorWidget* RicWorkflowFeatureTools::workflowEditor()
 }
 
 //--------------------------------------------------------------------------------------------------
-///
-//--------------------------------------------------------------------------------------------------
-RiuWorkflowEditorWidget* RicWorkflowFeatureTools::editableWorkflowEditor()
-{
-    RiuWorkflowEditorWidget* editor = workflowEditor();
-    if ( !editor || !editor->workflow() ) return nullptr;
-    if ( !editor->workflow()->isEditable() || editor->workflow()->isLocked() ) return nullptr;
-    return editor;
-}
-
-//--------------------------------------------------------------------------------------------------
 /// An empty workflow, saved to its folder on the first Save
 //--------------------------------------------------------------------------------------------------
 RimWorkflow* RicWorkflowFeatureTools::newWorkflow()

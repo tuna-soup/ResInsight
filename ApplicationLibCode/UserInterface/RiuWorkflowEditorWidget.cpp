@@ -33,9 +33,6 @@
 #include "Workflow/RimWorkflowTaskInput.h"
 #include "Workflow/RimWorkflowValidationTools.h"
 
-#include "cafCmdFeature.h"
-#include "cafCmdFeatureManager.h"
-
 #include <QAction>
 #include <QComboBox>
 #include <QDialog>
@@ -50,21 +47,18 @@
 #include <QSplitter>
 #include <QVBoxLayout>
 
+#include <functional>
 #include <map>
 
 namespace
 {
 //--------------------------------------------------------------------------------------------------
-/// The action of a command feature carrying user data for the current menu
+///
 //--------------------------------------------------------------------------------------------------
-QAction* featureAction( const QString& commandId, const QString& text, const QVariantMap& userData )
+QAction* addMenuAction( QMenu* menu, const QString& text, std::function<void()> slot, const QString& icon = {} )
 {
-    auto* feature = caf::CmdFeatureManager::instance()->getCommandFeature( commandId.toStdString() );
-    if ( !feature ) return nullptr;
-
-    QAction* action = feature->actionWithUserData( text, userData );
-    action->setCheckable( false );
-    action->setEnabled( true );
+    QAction* action = menu->addAction( icon.isEmpty() ? QIcon() : QIcon( icon ), text );
+    QObject::connect( action, &QAction::triggered, menu, std::move( slot ) );
     return action;
 }
 } // namespace
@@ -380,12 +374,7 @@ void RiuWorkflowEditorWidget::deleteItem( const RiuWorkflowGraphView::ItemRef& i
 //--------------------------------------------------------------------------------------------------
 void RiuWorkflowEditorWidget::renameTask( const QString& taskName )
 {
-    if ( !m_workflow || !m_workflow->definition().findNode( taskName ) ) return;
-    if ( !m_workflow->isEditable() || m_workflow->isLocked() )
-    {
-        showMessage( m_workflow->isLocked() ? QString( "The workflow is locked while a job is running" ) : m_workflow->readOnlyReason() );
-        return;
-    }
+    if ( !canEdit() || !m_workflow->definition().findNode( taskName ) ) return;
 
     bool          ok = false;
     const QString newName =
@@ -640,24 +629,20 @@ void RiuWorkflowEditorWidget::showContextMenu( const RiuWorkflowGraphView::ItemR
     QMenu menu;
     if ( item.kind == RiuWorkflowGraphView::ItemRef::Kind::Task && editable )
     {
-        const QVariantMap data{ { "task", item.task } };
-        if ( auto* action = featureAction( "RicRenameWorkflowTaskFeature", "Rename...", data ) ) menu.addAction( action );
-        if ( auto* action = featureAction( "RicSetWorkflowResultTaskFeature", "Set as Result Task", data ) )
-        {
-            action->setEnabled( RimWorkflowDefinitionTools::effectiveResultTask( m_workflow->definition() ) != item.task ||
-                                m_workflow->definition().resultTask.isEmpty() );
-            menu.addAction( action );
-        }
-        appendOptionalInputsMenu( &menu, item.task );
-        appendMapMenu( &menu, item.task );
+        const QString task = item.task;
+        addMenuAction( &menu, "Rename...", [this, task]() { renameTask( task ); } );
+        addMenuAction( &menu, "Set as Result Task", [this, task]() { setResultTask( task ); } )
+            ->setEnabled( RimWorkflowDefinitionTools::effectiveResultTask( m_workflow->definition() ) != task ||
+                          m_workflow->definition().resultTask.isEmpty() );
+        appendOptionalInputsMenu( &menu, task );
+        appendMapMenu( &menu, task );
         menu.addSeparator();
-        if ( auto* action = featureAction( "RicDeleteWorkflowTaskFeature", "Delete Task", data ) ) menu.addAction( action );
+        addMenuAction( &menu, "Delete Task", [this, item]() { deleteItem( item ); }, ":/Erase.svg" );
     }
     else if ( item.kind == RiuWorkflowGraphView::ItemRef::Kind::Edge && editable )
     {
-        const QVariantMap data{ { "from", item.from }, { "output", item.output }, { "to", item.to }, { "input", item.input } };
         appendCollectMenu( &menu, item );
-        if ( auto* action = featureAction( "RicDeleteWorkflowConnectionFeature", "Delete Connection", data ) ) menu.addAction( action );
+        addMenuAction( &menu, "Delete Connection", [this, item]() { deleteItem( item ); }, ":/Erase.svg" );
     }
     else
     {
@@ -715,12 +700,9 @@ void RiuWorkflowEditorWidget::appendAddTaskMenu( QMenu* menu, const QPointF& sce
             if ( text.isEmpty() || usedTexts.contains( text ) ) text = id;
             usedTexts.insert( text );
 
-            const QVariantMap data{ { "taskId", id }, { "x", scenePos.x() }, { "y", scenePos.y() } };
-            if ( auto* action = featureAction( "RicAddWorkflowTaskFeature", text, data ) )
-            {
-                action->setToolTip( task.value( "description" ).toString() );
-                groupMenu->addAction( action );
-            }
+            addMenuAction(
+                groupMenu, text, [this, id, scenePos]() { addTask( id, scenePos ); }, ":/Plus.png" )
+                ->setToolTip( task.value( "description" ).toString() );
         }
     }
     addMenu->setToolTipsVisible( true );
@@ -734,16 +716,8 @@ void RiuWorkflowEditorWidget::appendMapMenu( QMenu* menu, const QString& taskNam
     const RimWorkflowDefinitionNode* node = m_workflow->definition().findNode( taskName );
     if ( !node ) return;
 
-    const QVariantMap data{ { "task", taskName } };
-    if ( auto* action = featureAction( "RicMapWorkflowTaskFeature", node->map ? "Edit Map..." : "Map Over...", data ) )
-    {
-        action->setToolTip( "Run the task once for each item of a mapping and collect the outputs by key" );
-        menu->addAction( action );
-    }
-    if ( node->map )
-    {
-        if ( auto* action = featureAction( "RicRemoveWorkflowTaskMapFeature", "Remove Map", data ) ) menu->addAction( action );
-    }
+    addMenuAction( menu, node->map ? "Edit Map..." : "Map Over...", [this, taskName]() { editTaskMap( taskName ); }, ":/Refresh.svg" )->setToolTip( "Run the task once for each item of a mapping and collect the outputs by key" );
+    if ( node->map ) addMenuAction( menu, "Remove Map", [this, taskName]() { removeTaskMap( taskName ); } );
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -754,10 +728,9 @@ void RiuWorkflowEditorWidget::appendCollectMenu( QMenu* menu, const RiuWorkflowG
     const RimWorkflowDefinitionEdge* edge = findEdge( item );
     if ( !edge || !edge->isCollected() ) return;
 
-    const QVariantMap data{ { "from", item.from }, { "output", item.output }, { "to", item.to }, { "input", item.input } };
     if ( edge->collect == RimWorkflowDefinitionEdge::Collect::Dict )
     {
-        if ( auto* action = featureAction( "RicRenameWorkflowCollectKeyFeature", "Rename Key...", data ) ) menu->addAction( action );
+        addMenuAction( menu, "Rename Key...", [this, item]() { renameCollectKey( item ); } );
     }
     else
     {
@@ -772,13 +745,8 @@ void RiuWorkflowEditorWidget::appendCollectMenu( QMenu* menu, const RiuWorkflowG
 
         for ( const auto& [text, delta] : { std::pair{ QString( "Move Earlier" ), -1 }, std::pair{ QString( "Move Later" ), 1 } } )
         {
-            QVariantMap moveData = data;
-            moveData["delta"]    = delta;
-            if ( auto* action = featureAction( "RicMoveWorkflowCollectMemberFeature", text, moveData ) )
-            {
-                action->setEnabled( index + delta >= 0 && index + delta < count );
-                menu->addAction( action );
-            }
+            addMenuAction( menu, text, [this, item, delta = delta]() { moveCollectMember( item, delta ); } )
+                ->setEnabled( index + delta >= 0 && index + delta < count );
         }
     }
     menu->addSeparator();
@@ -807,16 +775,16 @@ void RiuWorkflowEditorWidget::appendOptionalInputsMenu( QMenu* menu, const QStri
     QMenu* optionalMenu = menu->addMenu( "Optional Inputs" );
     for ( const auto& port : optionalPorts )
     {
-        const bool        configured = node->explicitConfigFields.contains( port.name );
-        const QVariantMap data{ { "task", taskName }, { "field", port.name }, { "configured", !configured } };
-        if ( auto* action = featureAction( "RicToggleWorkflowOptionalInputFeature", port.name, data ) )
-        {
-            action->setCheckable( true );
-            action->setChecked( configured );
-            action->setEnabled( !connected.contains( port.name ) );
-            action->setToolTip( port.description );
-            optionalMenu->addAction( action );
-        }
+        const bool    configured = node->explicitConfigFields.contains( port.name );
+        const QString field      = port.name;
+        QAction*      action     = addMenuAction( optionalMenu,
+                                         field,
+                                         [this, taskName, field, configured]()
+                                         { setOptionalInputConfigured( taskName, field, !configured ); } );
+        action->setCheckable( true );
+        action->setChecked( configured );
+        action->setEnabled( !connected.contains( field ) );
+        action->setToolTip( port.description );
     }
     optionalMenu->setToolTipsVisible( true );
 }
