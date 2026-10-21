@@ -586,10 +586,23 @@ TEST( RimWorkflowDefinitionEdit, mapTask )
     ASSERT_TRUE( roundTrip.has_value() );
     EXPECT_EQ( definition, roundTrip.value() );
 
+    // Editing the map keeps the items, also when they are renamed
+    const QJsonObject items{ { "x", 1.0 } };
+    definition.inputs.insert( "a", QJsonObject{ { "items", items } } );
+    RimWorkflowTaskMap collectAll = map;
+    collectAll.errorMode          = "collect_all";
+    definition                    = edited( RimWorkflowDefinitionTools::setTaskMap( definition, "a", collectAll ) );
+    EXPECT_EQ( items, definition.inputs.value( "a" ).toObject().value( "items" ).toObject() );
+    RimWorkflowTaskMap renamed = collectAll;
+    renamed.over               = "cases";
+    definition                 = edited( RimWorkflowDefinitionTools::setTaskMap( definition, "a", renamed ) );
+    EXPECT_FALSE( definition.inputs.value( "a" ).toObject().contains( "items" ) );
+    EXPECT_EQ( items, definition.inputs.value( "a" ).toObject().value( "cases" ).toObject() );
+
     // Removing the map restores the inputs and drops the mapping value
-    definition.inputs.insert( "a", QJsonObject{ { "items", QJsonObject{ { "x", 1.0 } } } } );
+    definition.inputs.insert( "a", QJsonObject{ { "cases", items } } );
     definition = edited( RimWorkflowDefinitionTools::setTaskMap( definition, "a", std::nullopt ) );
     EXPECT_FALSE( definition.findNode( "a" )->map.has_value() );
     EXPECT_EQ( QStringList( { "name", "factor" } ), definition.findNode( "a" )->configFields );
-    EXPECT_FALSE( definition.inputs.value( "a" ).toObject().contains( "items" ) );
+    EXPECT_FALSE( definition.inputs.value( "a" ).toObject().contains( "cases" ) );
 }

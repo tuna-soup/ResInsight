@@ -933,8 +933,9 @@ RimWorkflowDefinitionTools::EditResult RimWorkflowDefinitionTools::setTaskMap( c
         target->explicitConfigFields.removeAll( map->valueAs );
         values.remove( map->keyAs );
         values.remove( map->valueAs );
-        if ( node->map && node->map->over != map->over && definition.inputs.value( nodeName ).toObject().contains( node->map->over ) )
-            values[map->over] = definition.inputs.value( nodeName ).toObject().value( node->map->over );
+        // An edited map keeps the items it runs over, also when `over` is renamed
+        const QJsonObject oldValues = definition.inputs.value( nodeName ).toObject();
+        if ( node->map && oldValues.contains( node->map->over ) ) values[map->over] = oldValues.value( node->map->over );
     }
     target->map = map;
     result.inputs.insert( nodeName, values );
