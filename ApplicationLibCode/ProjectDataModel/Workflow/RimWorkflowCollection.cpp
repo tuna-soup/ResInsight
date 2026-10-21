@@ -42,8 +42,6 @@ RimWorkflowCollection::RimWorkflowCollection()
 
     CAF_PDM_InitFieldNoDefault( &m_installed, "Installed", "" );
     m_installed = new RimWorkflowInstalledCollection;
-
-    rescanWorkflows();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -61,7 +59,8 @@ QString RimWorkflowCollection::discoveryDirectory()
 
 //--------------------------------------------------------------------------------------------------
 /// Reload the task catalog, the workflow folders and the installed workflows. Workflows that
-/// have never been saved are kept.
+/// have never been saved are kept. This runs the Python helper, so it is not done in the
+/// constructor: projects are also created in console mode and by code generation.
 //--------------------------------------------------------------------------------------------------
 void RimWorkflowCollection::rescanWorkflows()
 {

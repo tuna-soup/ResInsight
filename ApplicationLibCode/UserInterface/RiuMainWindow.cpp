@@ -52,6 +52,7 @@
 #include "RimViewLinkerCollection.h"
 #include "RimViewWindow.h"
 #include "Workflow/RimWorkflow.h"
+#include "Workflow/RimWorkflowCollection.h"
 #include "Workflow/RimWorkflowFieldBinding.h"
 #include "Workflow/RimWorkflowJob.h"
 #include "Workflow/RimWorkflowTaskInput.h"
@@ -241,6 +242,11 @@ QString RiuMainWindow::mainWindowName()
 //--------------------------------------------------------------------------------------------------
 void RiuMainWindow::initializeGuiNewProjectLoaded()
 {
+    if ( auto* project = RimProject::current(); project && project->workflowCollection() )
+    {
+        project->workflowCollection()->rescanWorkflows();
+    }
+
     setPdmRoot( RimProject::current() );
     restoreTreeViewState();
 
