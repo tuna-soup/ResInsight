@@ -940,7 +940,8 @@ RimWorkflowDefinitionTools::EditResult RimWorkflowDefinitionTools::setTaskMap( c
     target->map = map;
     result.inputs.insert( nodeName, values );
 
-    // Downstream connections may no longer fit the changed output type
+    // The output type changes to or from dict[str, Output]. Downstream connections are kept, and
+    // validate() reports those that no longer fit; normalize() derives the config fields.
     result = normalize( result );
     return result;
 }
