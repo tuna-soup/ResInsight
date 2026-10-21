@@ -1,7 +1,9 @@
 """Command-line entry point: `python -m rips.taskmaestro_helper <subcommand>`.
 
 Subcommands other than ``run`` print exactly one JSON document to stdout. Any
-output written while importing task modules is redirected to stderr. On
+output written while importing task modules is redirected to stderr, including
+output written by extension modules and child processes straight to file
+descriptor 1. On
 failure they exit with code 2 and print
 ``{"status": "invalid", "error": {"message", "task", "field"}}``.
 """
@@ -9,9 +11,10 @@ failure they exit with code 2 and print
 from __future__ import annotations
 
 import json
+import os
 import sys
-from collections.abc import Callable
-from contextlib import redirect_stdout
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager, redirect_stdout
 from typing import Any
 
 from ._compat import DefinitionError
@@ -58,6 +61,26 @@ def _invalid(error: dict[str, Any]) -> str:
     return json.dumps({"status": "invalid", "error": error})
 
 
+@contextmanager
+def _stdout_to_stderr() -> Iterator[None]:
+    """Send everything written to stdout to stderr, at the file descriptor level."""
+    sys.stdout.flush()
+    try:
+        saved_fd = os.dup(1)
+    except OSError:  # no usable stdout file descriptor; redirect Python output only
+        saved_fd = None
+    try:
+        if saved_fd is not None:
+            os.dup2(2, 1)
+        with redirect_stdout(sys.stderr):
+            yield
+    finally:
+        sys.stderr.flush()
+        if saved_fd is not None:
+            os.dup2(saved_fd, 1)
+            os.close(saved_fd)
+
+
 def run_json_command(
     command: Callable[[list[str]], dict[str, Any]], argv: list[str]
 ) -> int:
@@ -65,7 +88,7 @@ def run_json_command(
 
     stdout = sys.stdout
     try:
-        with redirect_stdout(sys.stderr):
+        with _stdout_to_stderr():
             require_taskmaestro()
             result = command(argv)
     except DefinitionError as exc:
