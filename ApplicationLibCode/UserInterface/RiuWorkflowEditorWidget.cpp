@@ -102,13 +102,17 @@ RiuWorkflowEditorWidget::RiuWorkflowEditorWidget( QWidget* parent )
                               ":/undo.png",
                               [this]()
                               {
-                                  if ( m_workflow && m_workflow->canUndo() && !m_workflow->isLocked() ) m_workflow->undo();
+                                  if ( !m_workflow || !m_workflow->canUndo() || m_workflow->isLocked() ) return;
+                                  renameNodePositions( m_workflow->undoRenames() );
+                                  m_workflow->undo();
                               } );
     m_redoAction      = addAction( "Redo",
                               ":/redo.png",
                               [this]()
                               {
-                                  if ( m_workflow && m_workflow->canRedo() && !m_workflow->isLocked() ) m_workflow->redo();
+                                  if ( !m_workflow || !m_workflow->canRedo() || m_workflow->isLocked() ) return;
+                                  renameNodePositions( m_workflow->redoRenames() );
+                                  m_workflow->redo();
                               } );
     m_duplicateAction = addAction( "Duplicate as Editable",
                                    ":/Copy.svg",
@@ -398,6 +402,15 @@ void RiuWorkflowEditorWidget::renameTask( const QString& taskName )
     {
         m_graphView->renameNodePosition( newName, taskName );
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+/// Let renamed tasks keep their place in the graph
+//--------------------------------------------------------------------------------------------------
+void RiuWorkflowEditorWidget::renameNodePositions( const QMap<QString, QString>& renames )
+{
+    for ( auto it = renames.cbegin(); it != renames.cend(); ++it )
+        m_graphView->renameNodePosition( it.key(), it.value() );
 }
 
 //--------------------------------------------------------------------------------------------------

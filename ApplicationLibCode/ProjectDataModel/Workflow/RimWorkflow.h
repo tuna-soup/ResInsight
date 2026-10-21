@@ -88,8 +88,12 @@ public:
                                             const QMap<QString, QString>&                        renames = {} );
     bool                         canUndo() const;
     bool                         canRedo() const;
-    void                         undo();
-    void                         redo();
+
+    // Task renames (old name -> new name) that undo() and redo() would apply
+    QMap<QString, QString> undoRenames() const;
+    QMap<QString, QString> redoRenames() const;
+    void                   undo();
+    void                   redo();
 
     // Saving and running
     std::expected<void, QString>      save();

@@ -88,6 +88,7 @@ private:
     void appendMapMenu( QMenu* menu, const QString& taskName );
     void appendCollectMenu( QMenu* menu, const RiuWorkflowGraphView::ItemRef& item );
     bool canEdit();
+    void renameNodePositions( const QMap<QString, QString>& renames );
 
     const RimWorkflowDefinitionEdge* findEdge( const RiuWorkflowGraphView::ItemRef& item ) const;
 

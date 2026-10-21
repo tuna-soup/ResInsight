@@ -140,7 +140,12 @@ TEST( RimWorkflowEditing, undoRedoAndDirtyState )
     EXPECT_EQ( "/path/to/grid.roff", pathValue( *job, "load_grid" ) );
     EXPECT_TRUE( workflow.uiName().endsWith( " *" ) );
 
+    using Renames = QMap<QString, QString>;
+    EXPECT_EQ( ( Renames{ { "load_grid", "load_model" } } ), workflow.undoRenames() );
+    EXPECT_TRUE( workflow.redoRenames().isEmpty() );
+
     workflow.undo();
+    EXPECT_EQ( ( Renames{ { "load_model", "load_grid" } } ), workflow.redoRenames() );
     EXPECT_TRUE( workflow.definition().findNode( "load_model" ) );
     EXPECT_EQ( "/path/to/grid.roff", pathValue( *job, "load_model" ) );
     EXPECT_TRUE( workflow.canRedo() );
