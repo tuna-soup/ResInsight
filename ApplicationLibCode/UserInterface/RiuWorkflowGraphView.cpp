@@ -46,6 +46,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <vector>
 
 namespace
@@ -906,6 +907,35 @@ using namespace RiuWorkflowGraphViewItems;
 namespace
 {
 //--------------------------------------------------------------------------------------------------
+/// A port described by the graph JSON, with the type and description as the first tooltip lines
+//--------------------------------------------------------------------------------------------------
+PortInfo portFromJson( const QJsonObject& port, const QString& wholeLabel, QStringList* toolTip )
+{
+    const QString field = port.value( "name" ).toString();
+    PortInfo      info{ .key          = keyForField( field ),
+                        .label        = field.isEmpty() ? wholeLabel : field,
+                        .toolTip      = {},
+                        .typeName     = port.value( "type" ).toString(),
+                        .iconResource = port.value( "icon" ).toString() };
+    *toolTip = { QString( "%1: %2" ).arg( info.label, port.value( "type" ).toString( "any" ) ) };
+    if ( !port.value( "description" ).toString().isEmpty() ) *toolTip << port.value( "description" ).toString();
+    return info;
+}
+
+//--------------------------------------------------------------------------------------------------
+/// The port of the whole input or output model of a task
+//--------------------------------------------------------------------------------------------------
+PortInfo wholeModelPort( const QJsonObject& task, bool output )
+{
+    const QString prefix = output ? "output" : "input";
+    return PortInfo{ .key          = "model",
+                     .label        = prefix,
+                     .toolTip      = {},
+                     .typeName     = task.value( prefix + "_types" ).toObject().value( "" ).toString(),
+                     .iconResource = task.value( prefix + "_icons" ).toObject().value( "" ).toString() };
+}
+
+//--------------------------------------------------------------------------------------------------
 /// Ports of a task in edit mode: every input and output the task type declares
 //--------------------------------------------------------------------------------------------------
 std::pair<std::vector<PortInfo>, std::vector<PortInfo>> editModePorts( const QJsonObject& task, const QJsonArray& edges )
@@ -928,24 +958,18 @@ std::pair<std::vector<PortInfo>, std::vector<PortInfo>> editModePorts( const QJs
             hasWholeInput = true;
         }
 
-        PortInfo info;
-        info.key          = keyForField( field );
-        info.label        = field.isEmpty() ? "input" : field;
-        info.typeName     = port.value( "type" ).toString();
-        info.iconResource = port.value( "icon" ).toString();
-        QStringList toolTip{ QString( "%1: %2" ).arg( info.label, port.value( "type" ).toString( "any" ) ) };
-        if ( !port.value( "description" ).toString().isEmpty() ) toolTip << port.value( "description" ).toString();
+        QStringList toolTip;
+        PortInfo    info = portFromJson( port, "input", &toolTip );
         toolTip << ( required ? "Required" : "Optional" );
         if ( port.value( "configured" ).toBool() ) toolTip << "Set in the job configuration";
         if ( port.value( "covered" ).toBool() ) toolTip << "Provided by a whole-output connection";
-        info.toolTip = toolTip.join( "\n" );
         if ( !port.value( "collect" ).toString().isEmpty() )
         {
             info.collect = true;
             toolTip << ( port.value( "collect" ).toString() == "dict" ? "Connect several outputs to collect them, each under its own key"
                                                                       : "Connect several outputs to collect them into a list" );
-            info.toolTip = toolTip.join( "\n" );
         }
+        info.toolTip = toolTip.join( "\n" );
         if ( port.value( "map_over" ).toBool() )
         {
             info.toolTip = QString( "%1: %2\n%3\nThe task runs once per item; set the items in the job configuration" )
@@ -959,12 +983,7 @@ std::pair<std::vector<PortInfo>, std::vector<PortInfo>> editModePorts( const QJs
         const QJsonObject edge = value.toObject();
         if ( edge.value( "to" ).toString() == name && edge.value( "input" ).toString().isEmpty() && !hasWholeInput )
         {
-            inputs.insert( inputs.begin(),
-                           PortInfo{ .key          = "model",
-                                     .label        = "input",
-                                     .toolTip      = {},
-                                     .typeName     = task.value( "input_types" ).toObject().value( "" ).toString(),
-                                     .iconResource = task.value( "input_icons" ).toObject().value( "" ).toString() } );
+            inputs.insert( inputs.begin(), wholeModelPort( task, false ) );
             hasWholeInput = true;
         }
     }
@@ -972,24 +991,12 @@ std::pair<std::vector<PortInfo>, std::vector<PortInfo>> editModePorts( const QJs
     std::vector<PortInfo> outputs;
     for ( const QJsonValue& value : task.value( "output_ports" ).toArray() )
     {
-        const QJsonObject port  = value.toObject();
-        const QString     field = port.value( "name" ).toString();
-        PortInfo          info;
-        info.key          = keyForField( field );
-        info.label        = field.isEmpty() ? "output" : field;
-        info.typeName     = port.value( "type" ).toString();
-        info.iconResource = port.value( "icon" ).toString();
-        QStringList toolTip{ QString( "%1: %2" ).arg( info.label, port.value( "type" ).toString( "any" ) ) };
-        if ( !port.value( "description" ).toString().isEmpty() ) toolTip << port.value( "description" ).toString();
-        info.toolTip = toolTip.join( "\n" );
+        QStringList toolTip;
+        PortInfo    info = portFromJson( value.toObject(), "output", &toolTip );
+        info.toolTip     = toolTip.join( "\n" );
         outputs.push_back( info );
     }
-    if ( outputs.empty() )
-        outputs.push_back( PortInfo{ .key          = "model",
-                                     .label        = "output",
-                                     .toolTip      = {},
-                                     .typeName     = task.value( "output_types" ).toObject().value( "" ).toString(),
-                                     .iconResource = task.value( "output_icons" ).toObject().value( "" ).toString() } );
+    if ( outputs.empty() ) outputs.push_back( wholeModelPort( task, true ) );
     return { inputs, outputs };
 }
 
@@ -1163,11 +1170,6 @@ void RiuWorkflowGraphView::showGraph( const QJsonObject& graph, const QString& e
         configured.removeDuplicates();
         configFields.insert( name, configured );
     }
-    for ( const QJsonValue& value : edges )
-    {
-        const QJsonObject edge = value.toObject();
-        layoutEdges.emplace_back( edge.value( "from" ).toString(), edge.value( "to" ).toString() );
-    }
 
     // Read-only graphs only show the ports in use, plus the declared outputs of end tasks
     QMap<QString, QStringList> usedInputs;
@@ -1177,6 +1179,7 @@ void RiuWorkflowGraphView::showGraph( const QJsonObject& graph, const QString& e
         const QJsonObject edge = value.toObject();
         const QString     from = edge.value( "from" ).toString();
         const QString     to   = edge.value( "to" ).toString();
+        layoutEdges.emplace_back( from, to );
         if ( !taskData.contains( from ) || !taskData.contains( to ) || from == to ) continue;
         usedInputs[to].append( keyForField( edge.value( "input" ).toString() ) );
         usedOutputs[from].append( keyForField( edge.value( "output" ).toString() ) );
@@ -1240,11 +1243,11 @@ void RiuWorkflowGraphView::showGraph( const QJsonObject& graph, const QString& e
         QStringList   toolTip{ name };
         if ( !taskId.isEmpty() ) toolTip << taskId;
         if ( !description.isEmpty() ) toolTip << description;
+        const bool unknownType = data.contains( "known_type" ) && !data.value( "known_type" ).toBool();
         if ( name == result ) toolTip << "Result task: its output is the result of the workflow";
-        if ( data.contains( "known_type" ) && !data.value( "known_type" ).toBool() )
-            toolTip << "Unknown task type: the package providing it is not installed";
+        if ( unknownType ) toolTip << "Unknown task type: the package providing it is not installed";
         node->setTitle( name == result ? QString::fromUtf8( "\u2605 " ) + name : name, toolTip.join( "\n" ) );
-        node->setUnknownType( data.contains( "known_type" ) && !data.value( "known_type" ).toBool() );
+        node->setUnknownType( unknownType );
         node->setIssues( data.value( "issues" ).toArray() );
         m_scene->addItem( node );
         m_taskNodes.insert( name, node );
@@ -1270,22 +1273,22 @@ void RiuWorkflowGraphView::showGraph( const QJsonObject& graph, const QString& e
         return height;
     };
 
-    const auto layout      = RiuWorkflowGraphLayout::computeLayers( taskNames, layoutEdges );
-    qreal      totalHeight = 0;
-    for ( const QStringList& layer : layout.layers )
+    auto layerHeight = [&slotHeight]( const QStringList& layer )
     {
         qreal height = 0;
         for ( const QString& name : layer )
             height += slotHeight( name ) + rowGap;
-        totalHeight = std::max( totalHeight, height - rowGap );
-    }
+        return height - rowGap;
+    };
+
+    const auto layout      = RiuWorkflowGraphLayout::computeLayers( taskNames, layoutEdges );
+    qreal      totalHeight = 0;
+    for ( const QStringList& layer : layout.layers )
+        totalHeight = std::max( totalHeight, layerHeight( layer ) );
     for ( size_t column = 0; column < layout.layers.size(); ++column )
     {
-        const QStringList& layer       = layout.layers[column];
-        qreal              layerHeight = 0;
-        for ( const QString& name : layer )
-            layerHeight += slotHeight( name ) + rowGap;
-        qreal y = ( totalHeight - layerHeight + rowGap ) / 2.0;
+        const QStringList& layer = layout.layers[column];
+        qreal              y     = ( totalHeight - layerHeight( layer ) ) / 2.0;
         for ( const QString& name : layer )
         {
             auto*       node = m_taskNodes.value( name );
@@ -1302,28 +1305,21 @@ void RiuWorkflowGraphView::showGraph( const QJsonObject& graph, const QString& e
     // Positions the user (or a drop) has chosen override the layout
     for ( auto it = m_taskNodes.cbegin(); it != m_taskNodes.cend(); ++it )
     {
-        GraphNode*    config     = m_configNodes.value( it.key(), nullptr );
-        const QPointF layoutPos  = it.value()->pos();
-        QPointF       position   = layoutPos;
-        bool          positioned = false;
-        if ( m_pendingPositions.contains( it.key() ) )
-        {
-            position   = m_pendingPositions.value( it.key() );
-            positioned = true;
-        }
-        else if ( m_positions.contains( "task:" + it.key() ) )
-        {
-            position   = m_positions.value( "task:" + it.key() );
-            positioned = true;
-        }
-        it.value()->setPos( position );
+        const QString          name    = it.key();
+        const bool             pending = m_pendingPositions.contains( name );
+        std::optional<QPointF> position;
+        if ( pending )
+            position = m_pendingPositions.value( name );
+        else if ( m_positions.contains( "task:" + name ) )
+            position = m_positions.value( "task:" + name );
+        if ( position ) it.value()->setPos( *position );
 
-        if ( config )
+        if ( GraphNode* config = m_configNodes.value( name, nullptr ) )
         {
-            if ( m_positions.contains( "config:" + it.key() ) && !m_pendingPositions.contains( it.key() ) )
-                config->setPos( m_positions.value( "config:" + it.key() ) );
-            else if ( positioned )
-                config->setPos( position + QPointF( -configWidth - configGap, 0 ) );
+            if ( m_positions.contains( "config:" + name ) && !pending )
+                config->setPos( m_positions.value( "config:" + name ) );
+            else if ( position )
+                config->setPos( *position + QPointF( -configWidth - configGap, 0 ) );
         }
     }
     m_pendingPositions.clear();
