@@ -85,15 +85,12 @@ QProcessEnvironment RimWorkflowHelperProcess::environment( const QString& extraP
 std::expected<QJsonObject, QString>
     RimWorkflowHelperProcess::parseOutput( int exitCode, const QByteArray& standardOutput, const QByteArray& standardError )
 {
+    if ( const auto invalid = invalidResult( standardOutput ) )
+        return std::unexpected( errorMessage( invalid->value( "error" ).toObject() ) );
+
     QJsonParseError     parseError{};
     const QJsonDocument document = QJsonDocument::fromJson( standardOutput.trimmed(), &parseError );
-    if ( parseError.error == QJsonParseError::NoError && document.isObject() )
-    {
-        const QJsonObject result = document.object();
-        if ( result.value( "status" ).toString() == "invalid" )
-            return std::unexpected( errorMessage( result.value( "error" ).toObject() ) );
-        if ( exitCode == 0 ) return result;
-    }
+    if ( parseError.error == QJsonParseError::NoError && document.isObject() && exitCode == 0 ) return document.object();
 
     QString message = QString::fromUtf8( standardError ).trimmed();
     if ( message.isEmpty() ) message = QString::fromUtf8( standardOutput ).trimmed();
@@ -102,6 +99,18 @@ std::expected<QJsonObject, QString>
     if ( lines.size() > 6 ) message = lines.mid( lines.size() - 6 ).join( '\n' );
     if ( message.isEmpty() ) message = QString( "The workflow helper failed with exit code %1" ).arg( exitCode );
     return std::unexpected( message );
+}
+
+//--------------------------------------------------------------------------------------------------
+///
+//--------------------------------------------------------------------------------------------------
+std::optional<QJsonObject> RimWorkflowHelperProcess::invalidResult( const QByteArray& standardOutput )
+{
+    QJsonParseError     parseError{};
+    const QJsonDocument document = QJsonDocument::fromJson( standardOutput.trimmed(), &parseError );
+    if ( parseError.error != QJsonParseError::NoError || !document.isObject() ) return std::nullopt;
+    if ( document.object().value( "status" ).toString() != "invalid" ) return std::nullopt;
+    return document.object();
 }
 
 //--------------------------------------------------------------------------------------------------

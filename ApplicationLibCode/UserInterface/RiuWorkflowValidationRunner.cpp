@@ -147,7 +147,15 @@ void RiuWorkflowValidationRunner::onFinished()
     QProcess* process  = m_process;
     const int exitCode = process->exitStatus() == QProcess::NormalExit && process->error() != QProcess::FailedToStart ? process->exitCode()
                                                                                                                       : -1;
-    const auto output = RimWorkflowHelperProcess::parseOutput( exitCode, process->readAllStandardOutput(), process->readAllStandardError() );
+    const QByteArray standardOutput = process->readAllStandardOutput();
+    const QByteArray standardError  = process->readAllStandardError();
+
+    // An invalid definition is reported with the task and field it refers to
+    std::expected<QJsonObject, QString> output;
+    if ( const auto invalid = RimWorkflowHelperProcess::invalidResult( standardOutput ) )
+        output = invalid.value();
+    else
+        output = RimWorkflowHelperProcess::parseOutput( exitCode, standardOutput, standardError );
     m_process = nullptr;
     process->deleteLater();
 

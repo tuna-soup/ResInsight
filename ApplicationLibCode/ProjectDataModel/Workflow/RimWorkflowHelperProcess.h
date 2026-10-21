@@ -25,6 +25,7 @@
 #include <QStringList>
 
 #include <expected>
+#include <optional>
 
 //==================================================================================================
 /// Runs `python -m rips.taskmaestro_helper <args>`, which prints exactly one JSON document
@@ -39,5 +40,9 @@ std::expected<QJsonObject, QString>
 QStringList                         helperArguments( const QStringList& args );
 QProcessEnvironment                 environment( const QString& extraPythonPath );
 std::expected<QJsonObject, QString> parseOutput( int exitCode, const QByteArray& standardOutput, const QByteArray& standardError );
-QString                             errorMessage( const QJsonObject& error );
+
+// The `{"status": "invalid", "error": {...}}` document printed on stdout, if any. parseOutput()
+// reduces it to a message; this keeps the task and field the error refers to.
+std::optional<QJsonObject> invalidResult( const QByteArray& standardOutput );
+QString                    errorMessage( const QJsonObject& error );
 } // namespace RimWorkflowHelperProcess

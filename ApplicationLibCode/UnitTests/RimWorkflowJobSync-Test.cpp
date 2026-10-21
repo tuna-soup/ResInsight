@@ -21,6 +21,7 @@
 #include "RiaTestDataDirectory.h"
 #include "RimWorkflow.h"
 #include "RimWorkflowDefinitionTools.h"
+#include "RimWorkflowHelperProcess.h"
 #include "RimWorkflowJob.h"
 #include "RimWorkflowTaskInput.h"
 #include "RimWorkflowValidationTools.h"
@@ -240,6 +241,30 @@ TEST( RimWorkflowValidationTools, issuesFromHelperResult )
     ASSERT_EQ( 1u, result.issues.size() );
     EXPECT_EQ( RimWorkflowIssue::Severity::Warning, result.issues[0].severity );
     EXPECT_EQ( "paths", result.issues[0].field );
+}
+
+//--------------------------------------------------------------------------------------------------
+///
+//--------------------------------------------------------------------------------------------------
+TEST( RimWorkflowHelperProcess, invalidResultKeepsTaskAndField )
+{
+    const QByteArray invalid = R"({"status": "invalid", "error": {"message": "Bad value", "task": "load_model", "field": "path"}})";
+
+    const auto result = RimWorkflowHelperProcess::invalidResult( invalid + "\n" );
+    ASSERT_TRUE( result.has_value() );
+    const auto validation = RimWorkflowValidationTools::issuesFromHelperResult( *result, { "load_model" } );
+    EXPECT_FALSE( validation.describeSucceeded );
+    ASSERT_EQ( 1u, validation.issues.size() );
+    EXPECT_EQ( "load_model", validation.issues[0].task );
+    EXPECT_EQ( "path", validation.issues[0].field );
+
+    // parseOutput() reduces the same output to a message
+    const auto parsed = RimWorkflowHelperProcess::parseOutput( 2, invalid, {} );
+    ASSERT_FALSE( parsed.has_value() );
+    EXPECT_TRUE( parsed.error().startsWith( "Bad value" ) );
+
+    EXPECT_FALSE( RimWorkflowHelperProcess::invalidResult( R"({"status": "ok"})" ).has_value() );
+    EXPECT_FALSE( RimWorkflowHelperProcess::invalidResult( "Traceback ..." ).has_value() );
 }
 
 //--------------------------------------------------------------------------------------------------
