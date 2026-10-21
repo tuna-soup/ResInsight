@@ -738,27 +738,8 @@ std::expected<void, QString> RimWorkflow::saveAs( const QString& directory )
 }
 
 //--------------------------------------------------------------------------------------------------
-/// Write the current revision as workflow.yaml to a private temporary folder, used to run and
-/// validate unsaved edits
-//--------------------------------------------------------------------------------------------------
-std::expected<QString, QString> RimWorkflow::writeEditDirectorySync()
-{
-    auto directory = editDirectory();
-    if ( !directory ) return directory;
-    if ( m_editDirectoryRevision == m_revision ) return directory;
-
-    auto output = RimWorkflowHelperProcess::runSync( { "save", "--out-dir", directory.value(), "--workflow-only" },
-                                                     definitionJsonForSave(),
-                                                     RimWorkflowHelperProcess::defaultTimeoutMs,
-                                                     m_sourceDirectory );
-    if ( !output ) return std::unexpected( output.error() );
-
-    m_editDirectoryRevision = m_revision;
-    return directory;
-}
-
-//--------------------------------------------------------------------------------------------------
-/// The temporary folder that holds the YAML of unsaved edits, for validation and for running
+/// The temporary folder that live validation writes the YAML of unsaved edits to. Runs use their
+/// own folder (see prepareRunSource()), so validation never rewrites a file a run is reading.
 //--------------------------------------------------------------------------------------------------
 std::expected<QString, QString> RimWorkflow::editDirectory()
 {
@@ -775,14 +756,6 @@ std::expected<QString, QString> RimWorkflow::editDirectory()
 }
 
 //--------------------------------------------------------------------------------------------------
-/// Called when the edit folder has been written for `revision` by someone else (live validation)
-//--------------------------------------------------------------------------------------------------
-void RimWorkflow::setEditDirectoryRevision( int revision )
-{
-    if ( revision == m_revision ) m_editDirectoryRevision = revision;
-}
-
-//--------------------------------------------------------------------------------------------------
 /// The definition as sent to `taskmaestro_helper save`
 //--------------------------------------------------------------------------------------------------
 QByteArray RimWorkflow::definitionJsonForSave() const
@@ -793,9 +766,10 @@ QByteArray RimWorkflow::definitionJsonForSave() const
 }
 
 //--------------------------------------------------------------------------------------------------
-/// The arguments of `taskmaestro_helper run` for the current state of the workflow
+/// The arguments of `taskmaestro_helper run` for the current state of the workflow. Unsaved edits
+/// are written as workflow.yaml to `runDirectory`, a folder private to the run.
 //--------------------------------------------------------------------------------------------------
-std::expected<RimWorkflow::RunSource, QString> RimWorkflow::prepareRunSource()
+std::expected<RimWorkflow::RunSource, QString> RimWorkflow::prepareRunSource( const QString& runDirectory )
 {
     if ( m_source == Source::Registered )
     {
@@ -809,9 +783,13 @@ std::expected<RimWorkflow::RunSource, QString> RimWorkflow::prepareRunSource()
         return RunSource{ .baseArgs = { "run", workflowDirectory() }, .extraPythonPath = workflowDirectory() };
     }
 
-    auto editDirectory = writeEditDirectorySync();
-    if ( !editDirectory ) return std::unexpected( editDirectory.error() );
-    return RunSource{ .baseArgs = { "run", editDirectory.value() }, .extraPythonPath = m_sourceDirectory };
+    if ( runDirectory.isEmpty() ) return std::unexpected( "No folder to write the edited workflow to" );
+    auto output = RimWorkflowHelperProcess::runSync( { "save", "--out-dir", runDirectory, "--workflow-only" },
+                                                     definitionJsonForSave(),
+                                                     RimWorkflowHelperProcess::defaultTimeoutMs,
+                                                     m_sourceDirectory );
+    if ( !output ) return std::unexpected( output.error() );
+    return RunSource{ .baseArgs = { "run", runDirectory }, .extraPythonPath = m_sourceDirectory };
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -164,7 +164,7 @@ TEST( RimWorkflowEditing, undoRedoAndDirtyState )
     EXPECT_FALSE( readOnly.isEditable() );
     EXPECT_FALSE( readOnly.isDirty() );
     EXPECT_FALSE( readOnly.applyEdit( RimWorkflowDefinitionTools::setResultTask( readOnly.definition(), "" ) ).has_value() );
-    auto runSource = readOnly.prepareRunSource();
+    auto runSource = readOnly.prepareRunSource( {} );
     ASSERT_TRUE( runSource.has_value() );
     EXPECT_EQ( QStringList( { "run", "--registered", "test.workflow" } ), runSource->baseArgs );
 }

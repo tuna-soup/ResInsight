@@ -169,7 +169,6 @@ void RiuWorkflowValidationRunner::onFinished()
     {
         const auto validation = RimWorkflowValidationTools::issuesFromHelperResult( output.value(), workflow->definition().nodeNames() );
         workflow->setValidationResult( revision, validation.issues, validation.describeSucceeded );
-        if ( output->value( "status" ).toString() != "invalid" ) workflow->setEditDirectoryRevision( revision );
     }
     else
     {

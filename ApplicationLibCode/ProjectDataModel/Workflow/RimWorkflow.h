@@ -95,11 +95,9 @@ public:
     std::expected<void, QString>      save();
     QStringList                       saveInPlaceWarnings() const;
     std::expected<void, QString>      saveAs( const QString& directory );
-    std::expected<QString, QString>   writeEditDirectorySync();
     std::expected<QString, QString>   editDirectory();
-    void                              setEditDirectoryRevision( int revision );
     QByteArray                        definitionJsonForSave() const;
-    std::expected<RunSource, QString> prepareRunSource();
+    std::expected<RunSource, QString> prepareRunSource( const QString& runDirectory );
     QJsonObject                       inputValuesForSave() const;
 
     // Validation of the current revision (static checks plus `taskmaestro workflow describe`)
@@ -162,5 +160,4 @@ private:
     bool                           m_describeSucceeded  = true;
     QDateTime                      m_loadedModificationTime;
     std::unique_ptr<QTemporaryDir> m_editDirectory;
-    int                            m_editDirectoryRevision = -1;
 };

@@ -426,18 +426,18 @@ void RimWorkflowJob::runJob()
         return;
     }
 
-    auto runSource = workflow->prepareRunSource();
-    if ( !runSource )
-    {
-        RiaLogging::warning( QString( "Cannot run workflow: %1" ).arg( runSource.error() ).toStdString() );
-        return;
-    }
-
     QDir    tmp( QDir::tempPath() );
     QString runDir = QString( "resinsight_workflow_%1" ).arg( QUuid::createUuid().toString( QUuid::WithoutBraces ) );
     if ( !tmp.mkpath( runDir ) )
     {
         RiaLogging::warning( "Cannot create temp dir for workflow run." );
+        return;
+    }
+
+    auto runSource = workflow->prepareRunSource( tmp.absoluteFilePath( runDir ) );
+    if ( !runSource )
+    {
+        RiaLogging::warning( QString( "Cannot run workflow: %1" ).arg( runSource.error() ).toStdString() );
         return;
     }
     QString inputPath = tmp.absoluteFilePath( runDir + "/input.yaml" );
