@@ -78,13 +78,14 @@ QString RicWorkflowLocationUi::defaultFolder( const QString& name )
 }
 
 //--------------------------------------------------------------------------------------------------
-/// Ask for a name and a folder. Returns nothing when cancelled. Warns before using a folder that
-/// already holds a workflow, or a folder that will not be found by Rescan.
+/// Ask for a name and a folder. Returns nothing when cancelled. The name must be a valid workflow
+/// name. Warns before using a folder that already holds a workflow, or a folder that will not be
+/// found by Rescan.
 //--------------------------------------------------------------------------------------------------
 std::optional<RicWorkflowLocationUi::Location> RicWorkflowLocationUi::askForLocation( const QString& title, const QString& defaultName )
 {
     RicWorkflowLocationUi ui;
-    ui.setName( defaultName );
+    ui.setName( RimWorkflowDefinitionTools::identifierFrom( defaultName ) );
 
     QWidget* parent = Riu3DMainWindowTools::mainWindowWidget();
     while ( true )
@@ -96,6 +97,16 @@ std::optional<RicWorkflowLocationUi::Location> RicWorkflowLocationUi::askForLoca
         if ( ui.name().isEmpty() || ui.folder().isEmpty() )
         {
             QMessageBox::warning( parent, title, "Enter both a name and a folder." );
+            continue;
+        }
+
+        if ( !RimWorkflowDefinitionTools::isIdentifier( ui.name() ) )
+        {
+            QMessageBox::warning( parent,
+                                  title,
+                                  QString( "'%1' is not a valid workflow name; use letters, digits and underscores, and do not "
+                                           "start with a digit." )
+                                      .arg( ui.name() ) );
             continue;
         }
 
