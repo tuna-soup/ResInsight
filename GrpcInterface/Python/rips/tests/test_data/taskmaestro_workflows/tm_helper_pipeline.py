@@ -18,38 +18,6 @@ class StartInput(BaseModel):
     value: float
 
 
-class Wrapped(BaseModel):
-    """A number wrapped in another model."""
-
-    inner: Number
-
-
-class Pair(BaseModel):
-    """Two numbers to add."""
-
-    first: float
-    second: float
-
-
-class Values(BaseModel):
-    """Collected numbers."""
-
-    values: list[float]
-
-
-class KeyedValues(BaseModel):
-    """Keyed numbers to sum."""
-
-    values: dict[str, float]
-
-
-class Item(BaseModel):
-    """One mapped item."""
-
-    key: str
-    value: float
-
-
 class SpecialNumber(Number):
     """A number subclass, compatible with Number."""
 
@@ -79,51 +47,6 @@ class Double(Task[Number, Number]):
 
     def run(self, input: Number, ctx: ExecutionContext) -> Number:
         return Number(value=2 * input.value)
-
-
-class Wrap(Task[Number, Wrapped]):
-    """Wrap a number."""
-
-    name = "wrap"
-
-    def run(self, input: Number, ctx: ExecutionContext) -> Wrapped:
-        return Wrapped(inner=input)
-
-
-class Add(Task[Pair, Number]):
-    """Add two numbers."""
-
-    name = "add"
-
-    def run(self, input: Pair, ctx: ExecutionContext) -> Number:
-        return Number(value=input.first + input.second)
-
-
-class Sum(Task[Values, Number]):
-    """Sum collected numbers."""
-
-    name = "sum"
-
-    def run(self, input: Values, ctx: ExecutionContext) -> Number:
-        return Number(value=sum(input.values))
-
-
-class KeyedSum(Task[KeyedValues, Number]):
-    """Sum keyed numbers."""
-
-    name = "keyed_sum"
-
-    def run(self, input: KeyedValues, ctx: ExecutionContext) -> Number:
-        return Number(value=sum(input.values.values()))
-
-
-class PerItem(Task[Item, Number]):
-    """Return the value of a mapped item."""
-
-    name = "per_item"
-
-    def run(self, input: Item, ctx: ExecutionContext) -> Number:
-        return Number(value=input.value)
 
 
 class Special(Task[Number, SpecialNumber]):

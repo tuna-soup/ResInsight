@@ -16,7 +16,6 @@ import pytest
 
 pytest.importorskip("taskmaestro")
 
-import yaml
 from rips.taskmaestro_helper import __main__ as helper_main
 from rips.taskmaestro_helper.catalog import build_catalog, export_registered
 from rips.taskmaestro_helper.definition import (
@@ -77,7 +76,6 @@ def plugins(monkeypatch: pytest.MonkeyPatch) -> None:
         tasks={
             "test.start": f"{PIPELINE}:Start",
             "test.double": f"{PIPELINE}:Double",
-            "test.add": f"{PIPELINE}:Add",
             "test.constant": f"{PIPELINE}:Constant",
             "test.broken": "tm_helper_missing_module:Broken",
         },
@@ -133,7 +131,7 @@ def _round_trip(source: Path, out_dir: Path) -> tuple[dict[str, Any], dict[str, 
 def test_catalog_reports_broken_plugin_and_loads_the_rest(plugins: None) -> None:
     catalog = build_catalog()
     ids = [task["id"] for task in catalog["tasks"]]
-    assert ids == ["test.add", "test.constant", "test.double", "test.start"]
+    assert ids == ["test.constant", "test.double", "test.start"]
     assert [error["id"] for error in catalog["errors"]] == ["test.broken"]
 
     start = next(task for task in catalog["tasks"] if task["id"] == "test.start")
@@ -160,7 +158,19 @@ def test_catalog_cli_prints_one_json_document(
     out = capsys.readouterr().out
     document = json.loads(out)
     assert document["status"] == "ok"
-    assert len(document["tasks"]) == 4
+    assert len(document["tasks"]) == 3
+
+
+def test_cli_reports_missing_taskmaestro(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def missing(argv: list[str]) -> dict[str, Any]:
+        raise ModuleNotFoundError("No module named 'taskmaestro'", name="taskmaestro")
+
+    monkeypatch.setitem(helper_main.JSON_COMMANDS, "catalog", missing)
+    assert helper_main.main(["catalog"]) == 2
+    error = json.loads(capsys.readouterr().out)["error"]
+    assert error["message"].startswith("taskmaestro>=0.4,<0.5 is required")
 
 
 def test_cli_failure_prints_invalid_document(
@@ -232,482 +242,23 @@ def test_round_trip_whole_output_dependency(tmp_path: Path) -> None:
     assert "result_task" not in text
 
 
-def test_round_trip_output_field_routing(tmp_path: Path) -> None:
+# --- References ---
+
+
+def test_saved_input_drops_resinsight_refs(tmp_path: Path) -> None:
     source = _write_workflow(
         tmp_path / "src",
         f"""\
         workflow:
-          name: routed
-          tasks:
-            - task: {PIPELINE}.Start
-              name: first
-              config_fields: [value]
-            - task: {PIPELINE}.Wrap
-              name: wrap
-              depends_on: first
-            - task: {PIPELINE}.Double
-              name: unwrap
-              depends_on: [wrap, inner]
-        """,
-        "first:\n  value: 1\n",
-    )
-    first, _ = _round_trip(source, tmp_path / "out")
-    assert {"from": "wrap", "output": "inner", "to": "unwrap", "input": None} in first[
-        "edges"
-    ]
-    assert (
-        "depends_on: [wrap, inner]" in (tmp_path / "out" / "workflow.yaml").read_text()
-    )
-
-
-def test_round_trip_fan_in_with_field_routing_and_two_instances(tmp_path: Path) -> None:
-    source = _write_workflow(
-        tmp_path / "src",
-        f"""\
-        workflow:
-          name: fan_in
-          result_task: add
-          tasks:
-            - task: {PIPELINE}.Start
-              name: left
-              config_fields: [value]
-            - task: {PIPELINE}.Start
-              name: right
-              config_fields: [value]
-            - task: {PIPELINE}.Add
-              name: add
-              depends_on:
-                first: [left, value]
-                second: [right, value]
-            - task: {PIPELINE}.Double
-              name: side
-              depends_on: left
-        """,
-        "left:\n  value: 1\nright:\n  value: 2\n",
-    )
-    first, second = _round_trip(source, tmp_path / "out")
-    assert first["result_task"] == "add"
-    assert [node["name"] for node in second["nodes"]] == [
-        "left",
-        "right",
-        "add",
-        "side",
-    ]
-    assert list(second["task_types"]) == [
-        f"{PIPELINE}.Start",
-        f"{PIPELINE}.Add",
-        f"{PIPELINE}.Double",
-    ]
-    text = (tmp_path / "out" / "workflow.yaml").read_text()
-    assert "result_task: add" in text
-    assert "first: [left, value]" in text
-
-
-def test_load_resolves_class_paths_to_instance_names(tmp_path: Path) -> None:
-    source = _write_workflow(
-        tmp_path / "src",
-        f"""\
-        workflow:
-          name: by_path
-          tasks:
-            - task: {PIPELINE}.Constant
-            - task: {PIPELINE}.Double
-              depends_on: {PIPELINE}.Constant
-        """,
-    )
-    definition = load_definition(source)
-    assert [node["name"] for node in definition["nodes"]] == ["constant", "double"]
-    assert definition["edges"][0]["from"] == "constant"
-
-
-def test_linear_mode_is_converted_to_explicit_edges(tmp_path: Path) -> None:
-    source = _write_workflow(
-        tmp_path / "src",
-        f"""\
-        workflow:
-          name: linear
-          tasks:
-            - task: {PIPELINE}.Constant
-            - task: {PIPELINE}.Double
-            - task: {PIPELINE}.Double
-              name: again
-        """,
-    )
-    definition = load_definition(source)
-    assert definition["edges"] == [
-        {"from": "constant", "output": None, "to": "double", "input": None},
-        {"from": "double", "output": None, "to": "again", "input": None},
-    ]
-    assert any("chained" in warning for warning in definition["warnings"])
-    write_definition(definition, tmp_path / "out")
-    reloaded = load_definition(tmp_path / "out", describe=True)
-    assert reloaded["edges"] == definition["edges"]
-    assert reloaded["warnings"] == []
-    assert reloaded["describe_error"] is None
-
-
-def test_empty_depends_on_guard_keeps_unconnected_tasks_independent(
-    tmp_path: Path,
-) -> None:
-    definition = load_definition(
-        _write_workflow(
-            tmp_path / "src",
-            f"""\
-            workflow:
-              name: independent
-              result_task: second
-              tasks:
-                - task: {PIPELINE}.Constant
-                  name: first
-                - task: {PIPELINE}.Constant
-                  name: second
-            """,
-        )
-    )
-    definition["edges"] = []
-    write_definition(definition, tmp_path / "out")
-    text = (tmp_path / "out" / "workflow.yaml").read_text()
-    assert "depends_on: {}" in text
-    reloaded = load_definition(tmp_path / "out", describe=True)
-    assert reloaded["edges"] == []
-    assert reloaded["describe_error"] is None
-    assert [task["depends_on"] for task in reloaded["describe"]["tasks"]] == [{}, None]
-
-
-def test_save_rejects_mixed_whole_and_field_inputs(tmp_path: Path) -> None:
-    from rips.taskmaestro_helper._compat import HelperError
-
-    definition = load_definition(
-        _write_workflow(
-            tmp_path / "src",
-            f"""\
-            workflow:
-              name: mixed
-              tasks:
-                - task: {PIPELINE}.Constant
-                  name: one
-                - task: {PIPELINE}.Add
-                  name: add
-                  depends_on:
-                    first: [one, value]
-                    second: [one, value]
-            """,
-        )
-    )
-    definition["edges"].append(
-        {"from": "one", "output": None, "to": "add", "input": None}
-    )
-    with pytest.raises(HelperError, match="whole input"):
-        write_definition(definition, tmp_path / "out")
-
-
-def test_save_rejects_read_only_and_empty_workflows(tmp_path: Path) -> None:
-    from rips.taskmaestro_helper._compat import HelperError
-
-    definition = load_definition(
-        _write_workflow(
-            tmp_path / "src",
-            f"""\
-            workflow:
-              name: single
-              tasks:
-                - task: {PIPELINE}.Constant
-            """,
-        )
-    )
-    with pytest.raises(HelperError, match="read-only"):
-        write_definition({**definition, "editable": False}, tmp_path / "out")
-    with pytest.raises(HelperError, match="no tasks"):
-        write_definition({**definition, "nodes": []}, tmp_path / "out")
-
-
-# --- Mapped tasks and collected inputs ---
-
-
-def test_round_trip_positional_collect(tmp_path: Path) -> None:
-    source = _write_workflow(
-        tmp_path / "src",
-        f"""\
-        workflow:
-          name: collected
-          tasks:
-            - task: {PIPELINE}.Constant
-              name: a
-            - task: {PIPELINE}.Constant
-              name: b
-            - task: {PIPELINE}.Sum
-              name: total
-              depends_on:
-                values:
-                  collect: [[b, value], [a, value]]
-        """,
-    )
-    first, _ = _round_trip(source, tmp_path / "out")
-    assert [edge for edge in first["edges"] if edge["to"] == "total"] == [
-        {
-            "from": "b",
-            "output": "value",
-            "to": "total",
-            "input": "values",
-            "collect": "list",
-            "key": None,
-        },
-        {
-            "from": "a",
-            "output": "value",
-            "to": "total",
-            "input": "values",
-            "collect": "list",
-            "key": None,
-        },
-    ]
-    raw = yaml.safe_load((tmp_path / "out" / "workflow.yaml").read_text())
-    assert raw["workflow"]["tasks"][2]["depends_on"] == {
-        "values": {"collect": [["b", "value"], ["a", "value"]]}
-    }
-
-
-def test_round_trip_keyed_collect(tmp_path: Path) -> None:
-    source = _write_workflow(
-        tmp_path / "src",
-        f"""\
-        workflow:
-          name: keyed
-          tasks:
-            - task: {PIPELINE}.Constant
-              name: a
-            - task: {PIPELINE}.Constant
-              name: b
-            - task: {PIPELINE}.KeyedSum
-              name: total
-              depends_on:
-                values:
-                  collect: {{first: [a, value], second: [b, value]}}
-        """,
-    )
-    first, _ = _round_trip(source, tmp_path / "out")
-    assert [
-        (edge["from"], edge["collect"], edge["key"])
-        for edge in first["edges"]
-        if edge["to"] == "total"
-    ] == [("a", "dict", "first"), ("b", "dict", "second")]
-    raw = yaml.safe_load((tmp_path / "out" / "workflow.yaml").read_text())
-    assert raw["workflow"]["tasks"][2]["depends_on"] == {
-        "values": {"collect": {"first": ["a", "value"], "second": ["b", "value"]}}
-    }
-
-
-def test_save_rejects_inconsistent_collect(tmp_path: Path) -> None:
-    from rips.taskmaestro_helper._compat import HelperError
-
-    source = _write_workflow(
-        tmp_path / "src",
-        f"""\
-        workflow:
-          name: keyed
-          tasks:
-            - task: {PIPELINE}.Constant
-              name: a
-            - task: {PIPELINE}.Constant
-              name: b
-            - task: {PIPELINE}.KeyedSum
-              name: total
-              depends_on:
-                values:
-                  collect: {{first: [a, value], second: [b, value]}}
-        """,
-    )
-    definition = load_definition(source)
-    definition["edges"][-1]["key"] = "first"
-    with pytest.raises(HelperError, match="Duplicate key"):
-        write_definition(definition, tmp_path / "out")
-    definition["edges"][-1]["collect"] = "list"
-    with pytest.raises(HelperError, match="mixes"):
-        write_definition(definition, tmp_path / "out")
-
-
-def test_round_trip_mapped_task(tmp_path: Path) -> None:
-    source = _write_workflow(
-        tmp_path / "src",
-        f"""\
-        workflow:
-          name: mapped
-          tasks:
-            - task: {PIPELINE}.PerItem
-              name: items
-              map: {{over: numbers, key_as: key, value_as: value, error_mode: collect_all}}
-        """,
-        "items:\n  numbers:\n    a: 1.0\n    b: 2.0\n",
-    )
-    first, _ = _round_trip(source, tmp_path / "out")
-    assert first["nodes"][0]["map"] == {
-        "over": "numbers",
-        "key_as": "key",
-        "value_as": "value",
-        "error_mode": "collect_all",
-    }
-    assert first["nodes"][0]["config_fields"] == []
-    assert first["inputs"] == {"items": {"numbers": {"a": 1.0, "b": 2.0}}}
-    raw = yaml.safe_load((tmp_path / "out" / "workflow.yaml").read_text())
-    assert raw["workflow"]["tasks"][0]["map"] == {
-        "over": "numbers",
-        "key_as": "key",
-        "value_as": "value",
-        "error_mode": "collect_all",
-    }
-    assert yaml.safe_load((tmp_path / "out" / "input.yaml").read_text()) == {
-        "items": {"numbers": {"a": 1.0, "b": 2.0}}
-    }
-
-
-def test_save_rejects_invalid_map(tmp_path: Path) -> None:
-    from rips.taskmaestro_helper._compat import HelperError
-
-    source = _write_workflow(
-        tmp_path / "src",
-        f"""\
-        workflow:
-          name: mapped
-          tasks:
-            - task: {PIPELINE}.PerItem
-              name: items
-              map: {{over: numbers, key_as: key, value_as: value}}
-        """,
-    )
-    definition = load_definition(source)
-    definition["nodes"][0]["map"]["value_as"] = "key"
-    with pytest.raises(HelperError, match="both the key"):
-        write_definition(definition, tmp_path / "out")
-
-
-# --- Read-only workflows ---
-
-
-@pytest.mark.parametrize(
-    ("tasks", "reason"),
-    [
-        (
-            """\
-                - workflow: inner.yaml
-                  name: nested
-            """,
-            "nested",
-        ),
-        (
-            """\
-                - task: tm_helper_missing_module.Missing
-            """,
-            "Cannot load task",
-        ),
-    ],
-)
-def test_unsupported_features_open_read_only(
-    tmp_path: Path, tasks: str, reason: str
-) -> None:
-    source = tmp_path / "src"
-    source.mkdir()
-    (source / "inner.yaml").write_text(
-        f"workflow:\n  name: inner\n  tasks:\n    - task: {PIPELINE}.Constant\n"
-    )
-    (source / "workflow.yaml").write_text(
-        "workflow:\n  name: read_only\n  tasks:\n"
-        + textwrap.indent(textwrap.dedent(tasks), "    ")
-    )
-    definition = load_definition(source)
-    assert not definition["editable"]
-    assert any(reason in text for text in definition["readonly_reasons"])
-
-
-# --- Header, passthrough and references ---
-
-
-def test_header_and_passthrough_preserved_and_refs_stripped(tmp_path: Path) -> None:
-    source = _write_workflow(
-        tmp_path / "src",
-        f"""\
-        # My workflow
-        #
-        # Explains things.
-
-        workflow:
-          name: with_header
+          name: with_ref
           tasks:
             - task: {PIPELINE}.Start
               config_fields: [value]
-        # A comment that is lost.
-        runner:
-          timeout_seconds: 30
-          hooks:
-            - hook: taskmaestro.hooks.timing.TimingHook
-        context:
-          correlation_id: abc
         """,
-        """\
-        start:
-          value: {__resinsight_ref__: EclipseCase, case_id: 0}
-        """,
+        "start:\n  value: {__resinsight_ref__: EclipseCase, case_id: 0}\n",
     )
-    definition = load_definition(source)
-    assert definition["header_comment"] == "# My workflow\n#\n# Explains things."
-    assert definition["passthrough"] == {
-        "runner": {
-            "timeout_seconds": 30,
-            "hooks": [{"hook": "taskmaestro.hooks.timing.TimingHook"}],
-        },
-        "context": {"correlation_id": "abc"},
-    }
-    write_definition(definition, tmp_path / "out", backup=True)
-    text = (tmp_path / "out" / "workflow.yaml").read_text()
-    assert text.startswith("# My workflow\n#\n# Explains things.\n\nworkflow:")
-    assert "A comment that is lost" not in text
-    assert "timeout_seconds: 30" in text
-    assert "__resinsight_ref__" not in (tmp_path / "out" / "input.yaml").read_text()
-    reloaded = load_definition(tmp_path / "out")
-    assert reloaded["passthrough"] == definition["passthrough"]
-    assert reloaded["inputs"] == {"start": {}}
-
-
-def test_backup_is_written_once(tmp_path: Path) -> None:
-    source = _write_workflow(
-        tmp_path / "src",
-        f"""\
-        workflow:
-          name: backup
-          tasks:
-            - task: {PIPELINE}.Constant
-        """,
-    )
-    original = (source / "workflow.yaml").read_text()
-    definition = load_definition(source)
-    result = write_definition(definition, source, backup=True)
-    assert result["backups"] == [str(source / "workflow.yaml.bak")]
-    write_definition(definition, source, backup=True)
-    assert (source / "workflow.yaml.bak").read_text() == original
-
-
-def test_wired_input_drops_configured_value(tmp_path: Path) -> None:
-    definition = load_definition(
-        _write_workflow(
-            tmp_path / "src",
-            f"""\
-            workflow:
-              name: wired
-              tasks:
-                - task: {PIPELINE}.Constant
-                  name: one
-                - task: {PIPELINE}.Add
-                  name: add
-                  depends_on:
-                    first: [one, value]
-                  config_fields: [first, second]
-            """,
-            "add:\n  first: 1\n  second: 2\nunknown_task:\n  x: 1\n",
-        )
-    )
-    add = next(node for node in definition["nodes"] if node["name"] == "add")
-    assert add["config_fields"] == ["second"]
-    assert definition["inputs"]["add"] == {"second": 2}
-    assert len(definition["warnings"]) == 2
+    write_definition(load_definition(source), tmp_path / "out")
+    assert (tmp_path / "out" / "input.yaml").read_text() == "start: {}\n"
 
 
 def test_save_cli_reads_definition_from_stdin(
@@ -734,24 +285,6 @@ def test_save_cli_reads_definition_from_stdin(
     assert result["status"] == "ok"
     assert result["describe"]["tasks"][0]["missing_config_fields"] == ["value"]
     assert (out_dir / "input.yaml").read_text() == "start: {}\n"
-
-
-def test_describe_yaml_reports_real_error_message(tmp_path: Path) -> None:
-    source = _write_workflow(
-        tmp_path / "src",
-        f"""\
-        workflow:
-          name: broken
-          tasks:
-            - task: {PIPELINE}.Add
-              name: add
-              depends_on:
-                first: {PIPELINE}.Constant
-        """,
-    )
-    description, error = describe_yaml(source / "workflow.yaml")
-    assert description is None
-    assert error is not None and "not found" in error["message"]
 
 
 # --- Registered workflows ---

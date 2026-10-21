@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._compat import HelperError, taskmaestro_version
+import taskmaestro
+from taskmaestro.exceptions import DefinitionError
+
 from .definition import definition_from_workflow
 from .schema import task_descriptor
 
@@ -83,7 +85,7 @@ def build_catalog(*, include_workflows: bool = True) -> dict[str, Any]:
     return {
         "format": CATALOG_FORMAT,
         "status": "ok",
-        "taskmaestro_version": taskmaestro_version(),
+        "taskmaestro_version": taskmaestro.__version__,
         "tasks": descriptors,
         "workflows": workflows,
         "errors": errors,
@@ -97,7 +99,7 @@ def export_registered(workflow_id: str, *, describe: bool = False) -> dict[str, 
     try:
         workflow = get_registered_workflow(workflow_id)
     except PluginLoadError as exc:
-        raise HelperError(str(exc)) from exc
+        raise DefinitionError(str(exc)) from exc
     tasks = load_registry(include_workflows=False).tasks
     return definition_from_workflow(
         workflow, workflow_id, class_ids(tasks), describe=describe

@@ -9,15 +9,12 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 from taskmaestro import definition as tm_definition
 from taskmaestro.exceptions import DefinitionError
 
-from ._compat import HelperError
 from .refs import strip_refs
 from .schema import ResInsightSchemaGenerator
 
@@ -26,20 +23,11 @@ WORKFLOW_FILE = tm_definition.WORKFLOW_FILE
 INPUT_FILE = tm_definition.INPUT_FILE
 
 
-@contextmanager
-def _as_helper_error() -> Iterator[None]:
-    try:
-        yield
-    except DefinitionError as exc:
-        raise HelperError(exc.message, task=exc.task, field=exc.field) from exc
-
-
 def load_definition(workflow_dir: Path, *, describe: bool = False) -> dict[str, Any]:
     """Load ``workflow.yaml`` (and ``input.yaml``) from a workflow folder."""
-    with _as_helper_error():
-        return tm_definition.load_definition(
-            workflow_dir, describe=describe, schema_generator=ResInsightSchemaGenerator
-        )
+    return tm_definition.load_definition(
+        workflow_dir, describe=describe, schema_generator=ResInsightSchemaGenerator
+    )
 
 
 def definition_from_workflow(
@@ -50,14 +38,13 @@ def definition_from_workflow(
     describe: bool = False,
 ) -> dict[str, Any]:
     """Convert an in-memory workflow to a definition."""
-    with _as_helper_error():
-        return tm_definition.definition_from_workflow(
-            workflow,
-            registered_id,
-            class_ids,
-            describe=describe,
-            schema_generator=ResInsightSchemaGenerator,
-        )
+    return tm_definition.definition_from_workflow(
+        workflow,
+        registered_id,
+        class_ids,
+        describe=describe,
+        schema_generator=ResInsightSchemaGenerator,
+    )
 
 
 def describe_yaml(
@@ -77,14 +64,13 @@ def write_definition(
     backup: bool = False,
 ) -> dict[str, Any]:
     """Write ``workflow.yaml`` (and ``input.yaml``) for a definition."""
-    with _as_helper_error():
-        return tm_definition.write_definition(
-            definition,
-            out_dir,
-            workflow_only=workflow_only,
-            backup=backup,
-            value_filter=strip_refs,
-        )
+    return tm_definition.write_definition(
+        definition,
+        out_dir,
+        workflow_only=workflow_only,
+        backup=backup,
+        value_filter=strip_refs,
+    )
 
 
 # --- Command-line entry points ---
@@ -113,9 +99,9 @@ def save_main(argv: list[str], stdin_text: str) -> dict[str, Any]:
     try:
         definition = json.loads(stdin_text)
     except json.JSONDecodeError as exc:
-        raise HelperError(f"Invalid definition JSON: {exc}") from exc
+        raise DefinitionError(f"Invalid definition JSON: {exc}") from exc
     if not isinstance(definition, dict):
-        raise HelperError("The definition must be a JSON object")
+        raise DefinitionError("The definition must be a JSON object")
 
     result = write_definition(
         definition,
