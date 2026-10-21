@@ -79,55 +79,44 @@ RiuWorkflowEditorWidget::RiuWorkflowEditorWidget( QWidget* parent )
     layout->setContentsMargins( 0, 0, 0, 0 );
     layout->setSpacing( 2 );
 
-    auto addAction = [this]( const QString& text, const QString& icon, const QKeySequence& shortcut, auto slot )
+    auto addAction = [this]( const QString& text, const QString& icon, auto slot )
     {
         auto* action = new QAction( icon.isEmpty() ? QIcon() : QIcon( icon ), text, this );
-        if ( !shortcut.isEmpty() )
-        {
-            action->setShortcut( shortcut );
-            action->setShortcutContext( Qt::WidgetWithChildrenShortcut );
-            this->addAction( action );
-        }
         connect( action, &QAction::triggered, this, slot );
         return action;
     };
 
     m_saveAction      = addAction( "Save",
                               ":/Save.svg",
-                              QKeySequence::Save,
                               [this]()
                               {
                                   if ( m_workflow ) RicWorkflowFeatureTools::saveWorkflow( m_workflow );
                               } );
     m_saveAsAction    = addAction( "Save As...",
                                 ":/SaveAs.svg",
-                                QKeySequence(),
                                 [this]()
                                 {
                                     if ( m_workflow ) RicWorkflowFeatureTools::saveWorkflowAs( m_workflow );
                                 } );
     m_undoAction      = addAction( "Undo",
                               ":/undo.png",
-                              QKeySequence::Undo,
                               [this]()
                               {
                                   if ( m_workflow && m_workflow->canUndo() && !m_workflow->isLocked() ) m_workflow->undo();
                               } );
     m_redoAction      = addAction( "Redo",
                               ":/redo.png",
-                              QKeySequence( Qt::CTRL | Qt::Key_Y ),
                               [this]()
                               {
                                   if ( m_workflow && m_workflow->canRedo() && !m_workflow->isLocked() ) m_workflow->redo();
                               } );
     m_duplicateAction = addAction( "Duplicate as Editable",
                                    ":/Copy.svg",
-                                   QKeySequence(),
                                    [this]()
                                    {
                                        if ( m_workflow ) RicWorkflowFeatureTools::duplicateAsEditable( m_workflow );
                                    } );
-    m_fitAction       = addAction( "Fit", "", QKeySequence(), [this]() { m_graphView->fitGraph(); } );
+    m_fitAction       = addAction( "Fit", "", [this]() { m_graphView->fitGraph(); } );
 
     m_splitter  = new QSplitter( Qt::Horizontal, this );
     m_palette   = new RiuWorkflowTaskPalette( m_splitter );
