@@ -54,7 +54,8 @@ Every subcommand except `run` prints exactly one JSON document. Output
 written while task modules are imported goes to stderr. On failure the
 helper exits with code 2 and prints
 `{"status": "invalid", "error": {"message", "task", "field"}}`.
-taskmaestro 0.4.0 or newer (below 0.5) is required (`_compat.py`).
+taskmaestro 0.4.0 or newer (below 0.5) is required (the `workflow` extra of
+`rips`); a missing or older taskmaestro is reported as an import error.
 
 | Subcommand | Purpose |
 |---|---|
@@ -357,66 +358,16 @@ register it in `createBinding()`.
    the job and the colours of the graph nodes; everything else goes to the
    log. Cancel terminates the process.
 
-## File layout (new)
+## Code layout
 
-```
-ApplicationLibCode/ProjectDataModel/Workflow/
-├── RimWorkflow.{h,cpp}                  # one workflow: definition, undo, save, run source
-├── RimWorkflowCollection.{h,cpp}        # the project-tree collection, rescan
-├── RimWorkflowInstalledCollection.{h,cpp} # the "Installed" folder
-├── RimWorkflowJob.{h,cpp}               # one set of input values; runs the workflow
-├── RimWorkflowTaskInput.{h,cpp}         # one entry per task
-├── RimWorkflowDefinition.{h,cpp}        # value structs: nodes, edges, issues
-├── RimWorkflowDefinitionTools.{h,cpp}   # JSON conversion, edit operations, static validation
-├── RimWorkflowPortCompatibility.{h,cpp} # ports and type checks
-├── RimWorkflowSchemaTools.{h,cpp}       # JSON schema helpers
-├── RimWorkflowTaskCatalog.{h,cpp}       # cached `catalog` output
-├── RimWorkflowHelperProcess.{h,cpp}     # runs the Python helper
-├── RimWorkflowValidationTools.{h,cpp}   # helper result → issues
-├── RimWorkflowDescribeTools.{h,cpp}     # graph from `taskmaestro describe` (read-only workflows)
-├── RimWorkflowFieldBinding.{h,cpp}      # abstract binding base
-└── RimWorkflow<Type>Binding.{h,cpp}     # Bool, Int, Float, String, Date, FilePath,
-                                         # Array, Case, WellPath, View
-
-ApplicationLibCode/Commands/WorkflowCommands/
-├── RicNewWorkflowFeature, RicDuplicateWorkflowAsEditableFeature,
-│   RicSaveWorkflowFeature, RicSaveWorkflowAsFeature, RicRescanWorkflowsFeature
-├── RicAddWorkflowTaskFeature, RicDeleteWorkflowTaskFeature,
-│   RicDeleteWorkflowConnectionFeature, RicRenameWorkflowTaskFeature,
-│   RicSetWorkflowResultTaskFeature, RicToggleWorkflowOptionalInputFeature
-├── RicNewWorkflowJobFeature, RicRunWorkflowJobFeature, RicCancelWorkflowJobFeature
-├── RicWorkflowFeatureTools.{h,cpp}      # shared helpers for the features
-└── RicWorkflowLocationUi.{h,cpp}        # name + folder dialog
-
-ApplicationLibCode/UserInterface/
-├── RiuWorkflowEditorWidget.{h,cpp}      # the dock: graph, palette, status
-├── RiuWorkflowGraphView.{h,cpp}         # QGraphicsView with editing
-├── RiuWorkflowGraphLayout.{h,cpp}       # pure layout (QtCore only)
-├── RiuWorkflowTaskPalette.{h,cpp}
-├── RiuWorkflowValidationRunner.{h,cpp}  # debounced async validation
-└── RiuWorkflowJobRunner.{h,cpp}         # runs a job, parses events
-
-GrpcInterface/Python/rips/taskmaestro_helper/
-├── __main__.py                          # CLI dispatch
-├── _compat.py                           # taskmaestro version check, HelperError
-├── catalog.py                           # catalog, export-registered
-├── definition.py                        # load, save
-├── describe.py                          # taskmaestro describe, in process
-├── schema.py                            # task schemas and descriptors
-├── refs.py                              # rips type whitelist + REF_MARKER
-└── run.py                               # resolve refs + invoke Runner
-
-GrpcInterface/Python/rips/tests/
-├── test_taskmaestro_helper.py
-├── test_taskmaestro_helper_definition.py   # run with --noconftest
-└── test_data/taskmaestro_workflows/
-
-ApplicationLibCode/UnitTests/
-├── RimWorkflowDefinition-Test.cpp       # fixtures in TestData/RimWorkflowDefinition/
-├── RimWorkflowJobSync-Test.cpp
-├── RimWorkflowDescribeTools-Test.cpp
-└── RiuWorkflowGraphLayout-Test.cpp
-```
+- C++ model: `ApplicationLibCode/ProjectDataModel/Workflow/` (`RimWorkflow*`).
+- Commands: `ApplicationLibCode/Commands/WorkflowCommands/`.
+- UI: `ApplicationLibCode/UserInterface/RiuWorkflow*`.
+- Python helper: `GrpcInterface/Python/rips/taskmaestro_helper/`, tests in
+  `GrpcInterface/Python/rips/tests/test_taskmaestro_helper*.py` (run with
+  `--noconftest`).
+- C++ unit tests: `ApplicationLibCode/UnitTests/RimWorkflow*-Test.cpp`,
+  `RiuWorkflowGraphLayout-Test.cpp`.
 
 Touched (existing files):
 

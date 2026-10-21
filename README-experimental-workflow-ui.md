@@ -34,7 +34,7 @@ git clone https://github.com/OPM/taskmaestro-resinsight.git \
 python -m pip install -e ~/resinsight-workflows/taskmaestro-resinsight
 ```
 
-The Workflow UI requires **taskmaestro 0.3.x** (0.3.0 or newer, below 0.4) and
+The Workflow UI requires **taskmaestro 0.4.x** (0.4.0 or newer, below 0.5) and
 **taskmaestro-resinsight 0.3.0** or newer. Check the installed versions:
 
 ```bash
