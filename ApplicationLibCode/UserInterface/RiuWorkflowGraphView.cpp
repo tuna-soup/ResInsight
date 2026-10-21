@@ -1744,7 +1744,17 @@ void RiuWorkflowGraphView::keyPressEvent( QKeyEvent* event )
     if ( m_editable )
     {
         const ItemRef selected = selectedItem();
-        if ( ( event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace ) && selected.kind != ItemRef::Kind::None )
+
+        // A config box carries the name of its task; deleting it must not delete the task
+        const auto selectedItems  = m_scene->selectedItems();
+        const bool configSelected = std::any_of( selectedItems.begin(),
+                                                 selectedItems.end(),
+                                                 []( QGraphicsItem* item )
+                                                 {
+                                                     auto* node = dynamic_cast<GraphNode*>( item );
+                                                     return node && node->isConfig();
+                                                 } );
+        if ( ( event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace ) && selected.kind != ItemRef::Kind::None && !configSelected )
         {
             emit deleteRequested( selected );
             event->accept();
