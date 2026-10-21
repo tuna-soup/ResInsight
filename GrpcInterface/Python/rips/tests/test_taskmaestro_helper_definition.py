@@ -20,10 +20,10 @@ import yaml
 from rips.taskmaestro_helper import __main__ as helper_main
 from rips.taskmaestro_helper.catalog import build_catalog, export_registered
 from rips.taskmaestro_helper.definition import (
+    describe_yaml,
     load_definition,
     write_definition,
 )
-from rips.taskmaestro_helper.describe import describe_yaml
 
 TEST_DATA = Path(__file__).parent / "test_data" / "taskmaestro_workflows"
 PIPELINE = "tm_helper_pipeline"
@@ -190,9 +190,8 @@ def test_schema_records_python_bases() -> None:
 
 def test_schema_perforation_output_is_not_a_well_path() -> None:
     pytest.importorskip("taskmaestro_resinsight")
-    from taskmaestro import get_registered_task
-
     from rips.taskmaestro_helper.schema import task_descriptor
+    from taskmaestro import get_registered_task
 
     add_perforation = task_descriptor(
         "resinsight.add_perforation", get_registered_task("resinsight.add_perforation")
@@ -799,7 +798,6 @@ def test_run_registered_workflow(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     import rips
-
     from rips.taskmaestro_helper.run import PROGRESS_PREFIX, main
 
     input_path = tmp_path / "input.yaml"

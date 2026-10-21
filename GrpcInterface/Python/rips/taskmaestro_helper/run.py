@@ -15,13 +15,13 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import yaml
 
 from .refs import REF_MARKER
-
 
 PROGRESS_PREFIX = "@@RI_WORKFLOW_EVENT@@"
 
@@ -112,10 +112,10 @@ def _load_workflow(workflow_dir: Path | None, registered_id: str | None) -> Any:
 
         return get_registered_workflow(registered_id)
 
-    from taskmaestro.yaml_config import _load_workflow_only
+    from taskmaestro.yaml_config import load_workflow_only
 
     assert workflow_dir is not None
-    workflow, _ = _load_workflow_only(workflow_dir / "workflow.yaml")
+    workflow, _ = load_workflow_only(workflow_dir / "workflow.yaml")
     return workflow
 
 
@@ -148,7 +148,7 @@ def run_workflow(
     resolver = make_rips_resolver(instance)
     try:
         resolved = resolve_refs(raw_input, resolver)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - reported as an error event
         _emit("error", message=f"Failed to resolve references: {exc}")
         return 1
 
@@ -156,7 +156,7 @@ def run_workflow(
 
     try:
         workflow = _load_workflow(workflow_dir, registered_id)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - reported as an error event
         _emit("error", message=f"Failed to load workflow: {exc}")
         return 1
 
@@ -168,7 +168,7 @@ def run_workflow(
     _emit("starting", workflow=workflow.name)
     try:
         result = Runner(hooks=[ProgressHook(run_id)]).run(job, ctx=ExecutionContext())
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - reported as an error event
         _emit("error", message=str(exc))
         return 1
 

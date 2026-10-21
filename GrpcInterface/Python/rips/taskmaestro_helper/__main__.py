@@ -14,7 +14,7 @@ from collections.abc import Callable
 from contextlib import redirect_stdout
 from typing import Any
 
-from ._compat import HelperError
+from ._compat import DefinitionError
 
 USAGE = (
     "usage: python -m rips.taskmaestro_helper "
@@ -68,7 +68,7 @@ def run_json_command(
         with redirect_stdout(sys.stderr):
             require_taskmaestro()
             result = command(argv)
-    except HelperError as exc:
+    except DefinitionError as exc:
         print(_invalid(exc.to_json()), file=stdout)
         return 2
     except SystemExit as exc:  # argparse errors
@@ -79,7 +79,7 @@ def run_json_command(
             file=stdout,
         )
         return 2
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - always answer ResInsight with JSON
         print(
             _invalid(
                 {"message": f"{type(exc).__name__}: {exc}", "task": None, "field": None}

@@ -15,49 +15,13 @@ from .schema import task_descriptor
 CATALOG_FORMAT = 1
 
 
-def _entry_points(group: str) -> list[Any]:
-    # Looked up through the module so tests can monkeypatch discovery.entry_points.
-    from taskmaestro import discovery
-
-    return sorted(discovery.entry_points(group=group), key=lambda ep: ep.name)
-
-
-def _error(
-    kind: str, entry_id: str, value: str, exc: Exception | str
-) -> dict[str, Any]:
-    return {"kind": kind, "id": entry_id, "entry_point": value, "message": str(exc)}
-
-
-def load_registered_tasks() -> tuple[dict[str, type[Any]], list[dict[str, Any]]]:
-    """Load every task entry point. Returns ``(tasks by id, errors)``."""
-    from taskmaestro.discovery import TASK_ENTRY_POINT_GROUP
-    from taskmaestro.task import Task
-
-    tasks: dict[str, type[Any]] = {}
-    errors: list[dict[str, Any]] = []
-    for entry_point in _entry_points(TASK_ENTRY_POINT_GROUP):
-        if entry_point.name in tasks:
-            errors.append(
-                _error("task", entry_point.name, entry_point.value, "Duplicate task id")
-            )
-            continue
-        try:
-            cls = entry_point.load()
-        except Exception as exc:
-            errors.append(_error("task", entry_point.name, entry_point.value, exc))
-            continue
-        if not (isinstance(cls, type) and issubclass(cls, Task)):
-            errors.append(
-                _error(
-                    "task",
-                    entry_point.name,
-                    entry_point.value,
-                    "The entry point is not a Task subclass",
-                )
-            )
-            continue
-        tasks[entry_point.name] = cls
-    return tasks, errors
+def _error(problem: Any) -> dict[str, Any]:
+    return {
+        "kind": problem.kind,
+        "id": problem.name,
+        "entry_point": problem.entry_point,
+        "message": problem.message,
+    }
 
 
 def class_ids(tasks: dict[str, type[Any]]) -> dict[type[Any], str]:
@@ -83,42 +47,38 @@ def _workflow_entry(
 
 
 def build_catalog(*, include_workflows: bool = True) -> dict[str, Any]:
-    from taskmaestro.discovery import WORKFLOW_ENTRY_POINT_GROUP
-    from taskmaestro.workflow import Workflow
+    from taskmaestro.discovery import load_registry
 
-    tasks, errors = load_registered_tasks()
+    registry = load_registry(include_workflows=include_workflows)
+    errors = [_error(problem) for problem in registry.problems]
     descriptors: list[dict[str, Any]] = []
-    for task_id, cls in sorted(tasks.items()):
+    for task_id, cls in sorted(registry.tasks.items()):
         try:
             descriptors.append(task_descriptor(task_id, cls))
-        except Exception as exc:
-            errors.append(_error("task", task_id, "", f"Cannot describe task: {exc}"))
+        except Exception as exc:  # noqa: BLE001 - report plugin errors, keep the rest
+            errors.append(
+                {
+                    "kind": "task",
+                    "id": task_id,
+                    "entry_point": "",
+                    "message": f"Cannot describe task: {exc}",
+                }
+            )
 
     workflows: list[dict[str, Any]] = []
-    if include_workflows:
-        ids = class_ids(tasks)
-        seen: set[str] = set()
-        for entry_point in _entry_points(WORKFLOW_ENTRY_POINT_GROUP):
-            if entry_point.name in seen:
-                errors.append(
-                    _error(
-                        "workflow",
-                        entry_point.name,
-                        entry_point.value,
-                        "Duplicate workflow id",
-                    )
-                )
-                continue
-            seen.add(entry_point.name)
-            try:
-                workflow = entry_point.load()
-                if not isinstance(workflow, Workflow):
-                    raise TypeError("The entry point is not a Workflow")
-                workflows.append(_workflow_entry(entry_point.name, workflow, ids))
-            except Exception as exc:
-                errors.append(
-                    _error("workflow", entry_point.name, entry_point.value, exc)
-                )
+    ids = class_ids(registry.tasks)
+    for workflow_id, workflow in sorted(registry.workflows.items()):
+        try:
+            workflows.append(_workflow_entry(workflow_id, workflow, ids))
+        except Exception as exc:  # noqa: BLE001 - report plugin errors, keep the rest
+            errors.append(
+                {
+                    "kind": "workflow",
+                    "id": workflow_id,
+                    "entry_point": "",
+                    "message": str(exc),
+                }
+            )
 
     return {
         "format": CATALOG_FORMAT,
@@ -131,14 +91,14 @@ def build_catalog(*, include_workflows: bool = True) -> dict[str, Any]:
 
 
 def export_registered(workflow_id: str, *, describe: bool = False) -> dict[str, Any]:
-    from taskmaestro.discovery import get_registered_workflow
+    from taskmaestro.discovery import get_registered_workflow, load_registry
     from taskmaestro.exceptions import PluginLoadError
 
     try:
         workflow = get_registered_workflow(workflow_id)
     except PluginLoadError as exc:
         raise HelperError(str(exc)) from exc
-    tasks, _errors = load_registered_tasks()
+    tasks = load_registry(include_workflows=False).tasks
     return definition_from_workflow(
         workflow, workflow_id, class_ids(tasks), describe=describe
     )

@@ -73,9 +73,8 @@ def test_progress_hook_reports_named_task_instances(
 def test_progress_hook_follows_runner_instance_names(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    from taskmaestro import EmptyConfig, ExecutionContext, Job, Runner, Task, Workflow
-
     from rips.taskmaestro_helper.run import PROGRESS_PREFIX, ProgressHook
+    from taskmaestro import EmptyConfig, ExecutionContext, Job, Runner, Task, Workflow
 
     class Step(Task[EmptyConfig, EmptyConfig]):
         name = "step"
@@ -108,9 +107,8 @@ def test_progress_hook_follows_runner_instance_names(
 def test_progress_hook_reports_runner_failure(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    from taskmaestro import EmptyConfig, ExecutionContext, Job, Runner, Task, Workflow
-
     from rips.taskmaestro_helper.run import PROGRESS_PREFIX, ProgressHook
+    from taskmaestro import EmptyConfig, ExecutionContext, Job, Runner, Task, Workflow
 
     class Fails(Task[EmptyConfig, EmptyConfig]):
         name = "fails"
@@ -139,11 +137,10 @@ def test_progress_hook_reports_mapped_items(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     from pydantic import BaseModel
+    from rips.taskmaestro_helper.run import PROGRESS_PREFIX, ProgressHook
     from taskmaestro import EmptyConfig, ExecutionContext, Job, Runner, Task, Workflow
     from taskmaestro.job import JobConfiguration
     from taskmaestro.mapping import TaskMap
-
-    from rips.taskmaestro_helper.run import PROGRESS_PREFIX, ProgressHook
 
     class Item(BaseModel):
         key: str
@@ -197,7 +194,6 @@ def test_run_helper_emits_progress_without_grpc(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     import rips
-
     from rips.taskmaestro_helper.run import PROGRESS_PREFIX, run_workflow
 
     (tmp_path / "progress_pipeline.py").write_text(

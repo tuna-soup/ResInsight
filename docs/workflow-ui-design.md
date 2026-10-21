@@ -54,7 +54,7 @@ Every subcommand except `run` prints exactly one JSON document. Output
 written while task modules are imported goes to stderr. On failure the
 helper exits with code 2 and prints
 `{"status": "invalid", "error": {"message", "task", "field"}}`.
-taskmaestro 0.3.0 or newer is required (`_compat.py`).
+taskmaestro 0.4.0 or newer (below 0.5) is required (`_compat.py`).
 
 | Subcommand | Purpose |
 |---|---|

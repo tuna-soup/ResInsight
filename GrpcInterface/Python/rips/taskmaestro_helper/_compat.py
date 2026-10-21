@@ -1,29 +1,32 @@
 """Version guard and shared error type for the taskmaestro helper.
 
-The helper relies on a few taskmaestro internals (YAML loader models,
-``import_class`` and the CLI describe implementation), so it only supports the
-0.3 series.
+The helper uses taskmaestro's public ``definition``, ``introspection`` and
+``discovery`` APIs, which are available from taskmaestro 0.4.
 """
 
 from __future__ import annotations
 
-MIN_TASKMAESTRO_VERSION = (0, 3)
-MAX_TASKMAESTRO_VERSION = (0, 4)
+try:
+    from taskmaestro.exceptions import DefinitionError
+except ImportError:  # taskmaestro missing or too old; require_taskmaestro reports it
+
+    class DefinitionError(Exception):  # type: ignore[no-redef]
+        def __init__(self, message, *, task=None, field=None):
+            super().__init__(message)
+            self.message = message
+            self.task = task
+            self.field = field
+
+        def to_json(self):
+            return {"message": self.message, "task": self.task, "field": self.field}
 
 
-class HelperError(Exception):
+MIN_TASKMAESTRO_VERSION = (0, 4)
+MAX_TASKMAESTRO_VERSION = (0, 5)
+
+
+class HelperError(DefinitionError):
     """An error reported to ResInsight as ``{"status": "invalid", "error": ...}``."""
-
-    def __init__(
-        self, message: str, *, task: str | None = None, field: str | None = None
-    ) -> None:
-        super().__init__(message)
-        self.message = message
-        self.task = task
-        self.field = field
-
-    def to_json(self) -> dict[str, str | None]:
-        return {"message": self.message, "task": self.task, "field": self.field}
 
 
 def _version_tuple(version: str) -> tuple[int, ...]:
@@ -52,5 +55,5 @@ def require_taskmaestro() -> None:
     if parsed < MIN_TASKMAESTRO_VERSION or parsed >= MAX_TASKMAESTRO_VERSION:
         raise HelperError(
             f"taskmaestro {version} is not supported; "
-            "install taskmaestro>=0.3,<0.4 to edit workflows"
+            "install taskmaestro>=0.4,<0.5 to edit workflows"
         )
