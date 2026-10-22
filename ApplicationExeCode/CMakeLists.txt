@@ -181,6 +181,15 @@ if(RESINSIGHT_ENABLE_GRPC)
                             "/NODEFAULTLIB:MSVCRTD.lib"
     )
   endif()
+
+  # gRPC links OpenSSL statically. Keep those symbols out of the dynamic symbol
+  # table, otherwise they interpose the system OpenSSL loaded by the Qt TLS
+  # plugin, mixing two OpenSSL versions and crashing during the TLS handshake.
+  if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    target_link_options(
+      ResInsight PRIVATE "LINKER:--exclude-libs,libssl.a:libcrypto.a"
+    )
+  endif()
 endif()
 
 # ##############################################################################
