@@ -224,7 +224,7 @@ jobs:
         # Deselected tests differ from the Linux/Windows reference values on macOS, see #15076
         run: |
           cd GrpcInterface/Python/rips
-          ${{ steps.python-path.outputs.PYTHON_EXECUTABLE }} -m pytest --console -v rips/tests/test_simulation_wells.py rips/tests/test_completion_export.py
+          ${{ steps.python-path.outputs.PYTHON_EXECUTABLE }} -m pytest --console -v tests/test_simulation_wells.py tests/test_completion_export.py
 
       - name: Write macOS launch instructions
         run: |
