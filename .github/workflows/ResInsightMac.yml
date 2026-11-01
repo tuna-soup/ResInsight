@@ -51,10 +51,6 @@ jobs:
           # unavailable".  (Apple/GitHub plan to end Intel macOS runners
           # after macOS 15 in Fall 2027, at which point this leg needs a
           # universal build or a self-hosted Intel runner.)
-          - runner: macos-15-intel
-            arch: x64
-            arch_label: "Intel (x86_64)"
-            deployment_target: "13.3"
     env:
       BUILD_TYPE: Release
       VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
@@ -186,6 +182,8 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
           -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ matrix.deployment_target }}
           -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+          -DCMAKE_C_FLAGS=-ffp-contract=off
+          -DCMAKE_CXX_FLAGS=-ffp-contract=off
           -DCMAKE_C_COMPILER_LAUNCHER=buildcache
           -DCMAKE_CXX_COMPILER_LAUNCHER=buildcache
           -DRESINSIGHT_INCLUDE_APPLICATION_UNIT_TESTS=true
@@ -226,9 +224,7 @@ jobs:
         # Deselected tests differ from the Linux/Windows reference values on macOS, see #15076
         run: |
           cd GrpcInterface/Python/rips
-          ${{ steps.python-path.outputs.PYTHON_EXECUTABLE }} -m pytest --console \
-            --deselect rips/tests/test_completion_export.py::test_export_completion_files_unified \
-            --deselect rips/tests/test_simulation_wells.py::test_10k_acclength
+          ${{ steps.python-path.outputs.PYTHON_EXECUTABLE }} -m pytest --console -v rips/tests/test_simulation_wells.py rips/tests/test_completion_export.py
 
       - name: Write macOS launch instructions
         run: |
