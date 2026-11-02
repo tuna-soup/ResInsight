@@ -34,6 +34,8 @@
 
 #include "cvfCollection.h"
 
+#include <cstdio>
+
 using namespace rips;
 
 //--------------------------------------------------------------------------------------------------
@@ -184,10 +186,44 @@ grpc::Status RiaGrpcSimulationWellService::GetPerfLength( grpc::ServerContext*  
     auto   mainGrid   = eclipseCase->mainGrid();
     double perfLength = 0.0;
 
+    std::fprintf( stderr, "PERFDIAG well=%s ts=%zu branches=%zu\n", request->well_name().c_str(), tsIdx, wellPaths.size() );
+    size_t branchIdx = 0;
     for ( auto wellPath : wellPaths )
     {
+        {
+            const auto& pts = wellPath->wellPathPoints();
+            const auto& mds = wellPath->measuredDepths();
+            double      sum = 0.0;
+            for ( const auto& p : pts )
+                sum += p.x() + p.y() + p.z();
+            std::fprintf( stderr,
+                          "PERFDIAG well=%s branch=%zu points=%zu md=[%.17g,%.17g] coordsum=%.17g\n",
+                          request->well_name().c_str(),
+                          branchIdx,
+                          pts.size(),
+                          mds.empty() ? 0.0 : mds.front(),
+                          mds.empty() ? 0.0 : mds.back(),
+                          sum );
+            for ( size_t i = 0; i < pts.size(); ++i )
+                std::fprintf( stderr,
+                              "PERFDIAG well=%s branch=%zu pt=%zu md=%.17g xyz=%.17g %.17g %.17g\n",
+                              request->well_name().c_str(),
+                              branchIdx,
+                              i,
+                              mds[i],
+                              pts[i].x(),
+                              pts[i].y(),
+                              pts[i].z() );
+        }
+
         auto extractor =
             std::make_unique<RigEclipseWellLogExtractor>( eclipseCase->eclipseCaseData(), wellPath, request->well_name() );
+
+        std::fprintf( stderr,
+                      "PERFDIAG well=%s branch=%zu intersections=%zu\n",
+                      request->well_name().c_str(),
+                      branchIdx,
+                      extractor->cellIntersectionInfosAlongWellPath().size() );
 
         for ( const auto& info : extractor->cellIntersectionInfosAlongWellPath() )
         {
@@ -199,12 +235,24 @@ grpc::Status RiaGrpcSimulationWellService::GetPerfLength( grpc::ServerContext*  
             auto wResCell =
                 currentWellResult->wellResultFrame( tsIdx )->findResultCellWellHeadExcluded( gridIndex, localCellIndex );
 
+            std::fprintf( stderr,
+                          "PERFDIAG well=%s branch=%zu cell=%zu md=[%.17g,%.17g] valid=%d open=%d\n",
+                          request->well_name().c_str(),
+                          branchIdx,
+                          info.globCellIndex,
+                          info.startMD,
+                          info.endMD,
+                          wResCell.isValid() ? 1 : 0,
+                          wResCell.isValid() && wResCell.isOpen() ? 1 : 0 );
+
             if ( wResCell.isValid() && wResCell.isOpen() )
             {
                 perfLength += info.endMD - info.startMD;
             }
         }
+        ++branchIdx;
     }
+    std::fprintf( stderr, "PERFDIAG well=%s total=%.17g\n", request->well_name().c_str(), perfLength );
 
     reply->set_accumulated_length( perfLength );
     return grpc::Status::OK;
