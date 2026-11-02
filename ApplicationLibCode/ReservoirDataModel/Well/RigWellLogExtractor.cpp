@@ -17,6 +17,7 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
+#include <cstdio>
 #include "RigWellLogExtractor.h"
 
 #include "RiaLogging.h"
@@ -252,6 +253,12 @@ void RigWellLogExtractor::insertIntersectionsInMap( const std::vector<HexInterse
 void RigWellLogExtractor::populateReturnArrays( std::map<RigMDCellIdxEnterLeaveKey, HexIntersectionInfo>& uniqueIntersections )
 {
     QStringList errorMessages;
+    const bool  diag = ( m_wellCaseErrorMsgName == "GI1" );
+    if ( diag )
+    {
+        for ( const auto& [key, info] : uniqueIntersections )
+            std::fprintf( stderr, "EXTRDIAG A md=%.17g hex=%zu enter=%d\n", key.measuredDepth, key.hexIndex, key.isEnteringCell ? 1 : 0 );
+    }
     // For same MD and same cell, remove enter/leave pairs, as they only touches the wellpath, and should not contribute.
     {
         std::map<RigMDCellIdxEnterLeaveKey, HexIntersectionInfo>::iterator it1 = uniqueIntersections.begin();
@@ -298,6 +305,12 @@ void RigWellLogExtractor::populateReturnArrays( std::map<RigMDCellIdxEnterLeaveK
                                 it->second ) );
             ++it;
         }
+    }
+
+    if ( diag )
+    {
+        for ( const auto& [key, info] : sortedUniqueIntersections )
+            std::fprintf( stderr, "EXTRDIAG B md=%.17g hex=%zu enter=%d\n", key.measuredDepth, key.hexIndex, key.isEnteringCell ? 1 : 0 );
     }
 
     // Add points for the endpoint of the wellpath, if it starts/ends inside a cell
@@ -415,6 +428,12 @@ void RigWellLogExtractor::populateReturnArrays( std::map<RigMDCellIdxEnterLeaveK
                 }
             }
         }
+    }
+
+    if ( diag )
+    {
+        for ( const auto& msg : errorMessages )
+            std::fprintf( stderr, "EXTRDIAG C %s\n", msg.toStdString().c_str() );
     }
 
     bool reportErrorMessages = false;
