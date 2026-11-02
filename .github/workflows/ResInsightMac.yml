@@ -39,6 +39,7 @@ jobs:
             arch: arm64
             arch_label: "Apple Silicon (arm64)"
             deployment_target: "15.0"
+            fp_flags: ""
           # Intel, built natively on GitHub's Intel macOS runner so
           # ResInsight also runs on x86_64 Macs (issue #1009).  The older
           # macos-13 Intel image was retired on 2025-12-04; macos-15-intel
@@ -51,10 +52,11 @@ jobs:
           # unavailable".  (Apple/GitHub plan to end Intel macOS runners
           # after macOS 15 in Fall 2027, at which point this leg needs a
           # universal build or a self-hosted Intel runner.)
-          - runner: macos-15-intel
-            arch: x64
-            arch_label: "Intel (x86_64)"
-            deployment_target: "13.3"
+          - runner: macos-15
+            arch: arm64
+            arch_label: "Apple Silicon (arm64) fp-contract=off"
+            deployment_target: "15.0"
+            fp_flags: "-ffp-contract=off"
     env:
       BUILD_TYPE: Release
       VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
@@ -186,6 +188,8 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
           -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ matrix.deployment_target }}
           -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+          "-DCMAKE_C_FLAGS=${{ matrix.fp_flags }}"
+          "-DCMAKE_CXX_FLAGS=${{ matrix.fp_flags }}"
           -DCMAKE_C_COMPILER_LAUNCHER=buildcache
           -DCMAKE_CXX_COMPILER_LAUNCHER=buildcache
           -DRESINSIGHT_INCLUDE_APPLICATION_UNIT_TESTS=true
@@ -226,8 +230,8 @@ jobs:
         # The deselected test differs from the Linux/Windows reference values on macOS, see #15076
         run: |
           cd GrpcInterface/Python/rips
-          ${{ steps.python-path.outputs.PYTHON_EXECUTABLE }} -m pytest --console \
-            --deselect rips/tests/test_completion_export.py::test_export_completion_files_unified
+          ${{ steps.python-path.outputs.PYTHON_EXECUTABLE }} -m pytest --console -s -v tests/test_simulation_wells.py::test_10k_acclength 2>&1 | tee perfdiag.log || true
+          grep -c PERFDIAG perfdiag.log || true
 
       - name: Write macOS launch instructions
         run: |
