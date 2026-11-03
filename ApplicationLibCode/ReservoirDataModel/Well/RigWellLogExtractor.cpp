@@ -253,7 +253,7 @@ void RigWellLogExtractor::insertIntersectionsInMap( const std::vector<HexInterse
 void RigWellLogExtractor::populateReturnArrays( std::map<RigMDCellIdxEnterLeaveKey, HexIntersectionInfo>& uniqueIntersections )
 {
     QStringList errorMessages;
-    const bool  diag = ( m_wellCaseErrorMsgName == "GI1" );
+    const bool  diag = ( m_wellCaseErrorMsgName == "GI1" || m_wellCaseErrorMsgName == "GP1" );
     if ( diag )
     {
         for ( const auto& [key, info] : uniqueIntersections )
