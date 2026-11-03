@@ -27,6 +27,9 @@
 #include "RigMainGrid.h"
 #include "RigResultAccessor.h"
 #include "RigWellLogExtractionTools.h"
+
+#include <cstdio>
+#include <cstdlib>
 #include "RigWellPath.h"
 #include "RigWellPathGeometryTools.h"
 #include "RigWellPathIntersectionTools.h"
@@ -69,6 +72,10 @@ void RigEclipseWellLogExtractor::calculateIntersection()
 
     double tolerance = computeLengthThreshold();
 
+    // DIAG ONLY: parametric tolerance override from the environment
+    const double paramTol = getenv( "RI_PARAMTOL" ) ? atof( getenv( "RI_PARAMTOL" ) ) : RigWellLogExtractionTools::intersectionParametricTolerance;
+    fprintf( stderr, "PERFDIAG paramTol=%g\n", paramTol );
+
     for ( size_t wpp = 0; wpp < m_wellPathGeometry->wellPathPoints().size() - 1; ++wpp )
     {
         std::vector<HexIntersectionInfo> intersections;
@@ -94,7 +101,7 @@ void RigEclipseWellLogExtractor::calculateIntersection()
                                                               hexCorners,
                                                               globalCellIndex,
                                                               &intersections,
-                                                              RigWellLogExtractionTools::intersectionParametricTolerance );
+                                                              paramTol );
         }
 
         if ( !isCellFaceNormalsOut )

@@ -235,8 +235,11 @@ jobs:
         # The deselected test differs from the Linux/Windows reference values on macOS, see #15076
         run: |
           cd GrpcInterface/Python/rips
+          echo "=== PERFDIAG RUN tol=fix ==="
           ${{ steps.python-path.outputs.PYTHON_EXECUTABLE }} -m pytest --console -s -v tests/test_simulation_wells.py::test_10k_acclength 2>&1 | tee perfdiag.log || true
-          grep -c PERFDIAG perfdiag.log || true
+          echo "=== PERFDIAG RUN tol=0 ==="
+          RI_PARAMTOL=0 ${{ steps.python-path.outputs.PYTHON_EXECUTABLE }} -m pytest --console -s -v tests/test_simulation_wells.py::test_10k_acclength 2>&1 | tee perfdiag-tol0.log || true
+          echo "=== PERFDIAG END ==="
 
       - name: Write macOS launch instructions
         run: |
